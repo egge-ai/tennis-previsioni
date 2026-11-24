@@ -1,0 +1,83 @@
+name: Aggiorna previsioni
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"        # ogni 15 minuti (GitHub può ritardare di qualche minuto)
+  workflow_dispatch:               # pulsante "Run workflow" per lanciarlo a mano
+
+permissions:
+  contents: write                  # serve solo per il "promemoria" mensile anti-disattivazione
+  pages: write
+  id-token: write
+
+concurrency:
+  group: aggiorna
+  cancel-in-progress: false
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installa librerie
+        run: pip install -q pandas numpy
+
+      - name: Recupera dati e stato dell'ultimo giro
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache
+            state
+            docs/data
+          key: dati-${{ github.run_id }}
+          restore-keys: dati-
+
+      - name: Scarica dati TML
+        run: |
+          # download completo una volta al giorno (alle 4 UTC) o se manca la cache
+          if [ ! -f cache/2015.csv ] || [ "$(date -u +%H%M)" -lt "0415" -a "$(date -u +%H)" = "04" ]; then
+            python pipeline/download.py --mode full
+          else
+            python pipeline/download.py --mode live
+          fi
+
+      - name: Ricalcola i modelli se ci sono risultati nuovi
+        run: |
+          mkdir -p state
+          NEW=$(cat cache/*.csv cache/atp_quali/*.csv 2>/dev/null | sha1sum | cut -c1-40)
+          OLD=$(cat state/data_hash.txt 2>/dev/null || true)
+          if [ "$NEW" != "$OLD" ] || [ ! -f docs/data/ratings_atp.json ]; then
+            python pipeline/train.py --cache cache --out docs/data && echo "$NEW" > state/data_hash.txt
+          else
+            echo "Nessun risultato nuovo: modelli invariati."
+          fi
+
+      - name: Quote e allarmi dal vivo
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python pipeline/live.py --cache cache --out docs/data --state state
+
+      - name: Promemoria mensile (evita che GitHub sospenda i lavori programmati)
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%d%H)" = "0103" ] && [ "$(date -u +%M)" -lt "15" ]; then
+            date -u > state_keepalive.txt
+            git config user.name "aggiornamento-automatico"; git config user.email "actions@users.noreply.github.com"
+            git add state_keepalive.txt && git commit -m "promemoria mensile" && git push || true
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Previsioni tennis live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: sicura, sportiva, onesta sui numeri — come un tabellone di Grand Slam
+   IDEA: il campo visto dall'alto; la rete si sposta verso chi è sfavorito
+   PICTURE: campo SVG del colore della superficie, nomi e percentuali grandi sulle due metà
+   COLOUR and TYPE: colore della superficie domina, giallo pallina come accento; Barlow Condensed + Barlow
+   LAYOUT: titolo, campo, controlli; sotto sicurezza storica, set, lista "schedina" */
+:root{color-scheme:light dark;--bg:light-dark(#f3f5ee,#0d1612);--card:light-dark(#fff,#15211b);--ink:light-dark(#0f1d16,#e8efe9);--mute:light-dark(#5a6a60,#94a89b);--line:light-dark(#dbe2d8,#25352c);--ball:#d4ef3a;--court:#2f6db5;--court2:#24568f}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Barlow,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px)}.wrap{max-width:1100px;margin:0 auto}
+h1,h2,.big{font-family:"Barlow Condensed",sans-serif;font-weight:800;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(32px,5vw,48px)}h2{font-size:28px;margin-bottom:12px}
+.sub{color:var(--mute);margin:6px 0 20px}
+.controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:16px}
+.opts{display:flex;flex-wrap:wrap;gap:8px;grid-column:1/-1;align-items:center}
+label{font-size:13px;color:var(--mute);display:block;margin-bottom:4px}
+input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);min-height:46px}
+input:focus,button:focus-visible{outline:3px solid var(--ball);outline-offset:1px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.seg button{font:inherit;font-weight:600;border:0;background:none;color:var(--ink);padding:0 16px;min-height:44px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--court);color:#fff}
+.btn{font:inherit;font-weight:600;border:0;border-radius:999px;padding:0 18px;min-height:44px;cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.fig{position:relative;min-height:clamp(170px,30vw,300px);border-radius:16px;overflow:hidden;background:var(--court2)}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.score{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;background:var(--court2);color:#fff;border-radius:16px 16px 0 0;padding:14px 18px 6px}
+.nm{font-weight:600;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:clamp(48px,9vw,96px);line-height:1;font-variant-numeric:tabular-nums}
+.score+.fig{border-radius:0 0 16px 16px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.seg.tour button{font-family:"Barlow Condensed",sans-serif;font-size:20px;font-weight:800;padding:0 22px;min-height:48px}
+.seg.tour button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.loading{opacity:.5}
+.warn{color:#b4471b;font-size:14px;margin:8px 0 0;min-height:1em}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.verdict{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:40px;line-height:1}
+.meter{display:flex;gap:4px;margin:14px 0 10px}.meter i{flex:1;height:10px;border-radius:5px;background:var(--line)}
+.meter i.on{background:var(--c)}
+.row{display:grid;grid-template-columns:4.5em minmax(0,1fr) 3.5em;gap:10px;align-items:center;margin:7px 0;font-variant-numeric:tabular-nums}
+.bar{height:22px;background:var(--line);border-radius:6px;overflow:hidden}.bar b{display:block;height:100%;background:var(--court)}
+.row span:last-child{text-align:right;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}th{font-size:13px;color:var(--mute);font-weight:500}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.hl td{background:color-mix(in srgb,var(--ball) 28%,transparent)}
+.x{border:0;background:none;color:var(--mute);font-size:20px;min-width:44px;min-height:44px;cursor:pointer}
+.total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:12px}
+.tag{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-right:4px;vertical-align:1px}
+td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
+.court-l{display:flex;align-items:center;gap:8px}.court-l select,.dv select,.dv input{font:inherit;font-size:16px;min-height:44px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:0 10px;max-width:100%}
+.spd td.n{font-variant-numeric:tabular-nums}.spd td.h{border-radius:6px}
+.dvlink{display:inline-block;margin:8px 0 0;font-weight:600;color:var(--ink);text-decoration:none;border-bottom:2px solid #d4ef3a}
+.dvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.tie h3{margin:0;font-family:"Barlow Condensed",sans-serif;font-size:26px;line-height:1.1}
+.tie .when{color:var(--mute);font-size:14px}
+.tie .tp{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 4px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:40px;line-height:1}
+.tie .tbar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin-bottom:12px}.tie .tbar b{display:block;height:100%;background:#2f6db5}
+.rub{border-top:1px solid var(--line);padding:10px 0;display:grid;gap:6px}
+.rub .rl{font-size:13px;color:var(--mute)}
+.rub .rp{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center}
+.rub .rp select{width:100%}
+.rub .pp{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;text-align:center;min-width:6.5em}
+.rub .rr{display:flex;gap:6px;flex-wrap:wrap}
+.rub .rr button{font:inherit;font-size:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:0 12px;min-height:40px;cursor:pointer}
+.rub .rr button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.h3{font-family:"Barlow Condensed",sans-serif;font-size:24px;margin:24px 0 10px}
+.done{color:#1f8a4c;font-weight:600}
+.alert{border-left:4px solid #c0392b;background:var(--card);border-radius:10px;padding:10px 14px;margin:0 0 8px;font-size:15px}
+.alert.tml{border-color:#d9822b}.alert time{color:var(--mute);font-size:13px;margin-right:6px}
+#livet tr{cursor:pointer}#livet tr:hover td{background:color-mix(in srgb,var(--ball) 18%,transparent)}
+.diff{color:#c0392b;font-weight:600}.flag{white-space:nowrap;cursor:pointer}.flag input{width:18px;height:18px;vertical-align:-3px}
+.stack thead{}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;margin:16px 0}.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.stat .big{font-size:36px}
+.small{font-size:13px;color:var(--mute)}
+@media(max-width:700px){.grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.rub .rp{grid-template-columns:minmax(0,1fr)}.rub .rp .pp{text-align:left}.rub .rp span:last-child{text-align:left!important}}
+@media(max-width:600px){.controls{grid-template-columns:minmax(0,1fr)}table{font-size:14px}}
+@media(prefers-reduced-motion:no-preference){.netmove{transition:transform .5s ease}}
+</style></head><body>
+<section class="band"><div class="wrap">
+<div class="top"><h1>Chi vince la partita?</h1>
+ <div class="seg tour" id="tour" role="group" aria-label="Circuito"><button data-v="atp">ATP</button><button data-v="wta">WTA</button></div></div>
+<a class="dvlink" href="#live">Partite in programma e avvisi dell'ultima ora →</a> &nbsp; <a class="dvlink" href="#davis">Coppa Davis questa settimana a Bologna: le previsioni di ogni sfida →</a>
+<p class="sub" id="lead">Scegli circuito, sfidanti e superficie: il modello ti dice chi è favorito e quanto puoi fidarti della previsione.</p>
+<div class="controls">
+ <div><label for="pa" id="la">Giocatore 1</label><input id="pa" list="names" autocomplete="off"></div>
+ <div><label for="pb" id="lb">Giocatore 2</label><input id="pb" list="names" autocomplete="off"></div>
+ <div class="opts">
+  <div class="seg" id="surf" role="group" aria-label="Superficie"><button data-v="Hard">Cemento</button><button data-v="Clay">Terra</button><button data-v="Grass">Erba</button></div>
+  <div class="seg" id="bo" role="group" aria-label="Formato"><button data-v="3">Al meglio dei 3</button><button data-v="5">dei 5</button></div>
+  <button class="btn ghost" id="swap" type="button">⇄ Inverti</button>
+  <label class="court-l"><span class="small">Campo</span><select id="court-sel"></select></label>
+ </div>
+</div>
+<datalist id="names"></datalist>
+<div class="score"><div><div class="nm" id="na"></div><div class="pc" id="ca"></div></div><div style="text-align:right"><div class="nm" id="nb"></div><div class="pc" id="cb"></div></div></div>
+<div class="fig" id="fig"><svg id="court" role="img" aria-label="Probabilità di vittoria"></svg></div>
+<p class="warn" id="warn"></p>
+</div></section>
+
+<section class="band" id="live" style="padding-top:0"><div class="wrap">
+ <h2>Partite in programma</h2>
+ <p class="sub" style="margin-top:0" id="livesub">Caricamento…</p>
+ <div id="alerts"></div>
+ <div class="card scroll"><table class="stack"><thead><tr><th>Quando</th><th>Partita</th><th class="n">Modello</th><th class="n">Mercato</th><th class="n">Previsione</th></tr></thead><tbody id="livet"></tbody></table></div>
+ <p class="small">Mercato = mediana delle quote dei bookmaker senza margine. Quando c'è, è la previsione principale: sulle partite del 2026 è stata più precisa del modello, perché contiene anche infortuni e notizie dell'ultimo minuto. Tocca una partita per vederla nel dettaglio.</p>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap grid">
+ <div class="card" id="sure"></div>
+ <div class="card"><h2>Risultato in set</h2><div id="sets"></div>
+  <p class="small">Probabilità di ogni punteggio finale, calcolata dalla probabilità di vincere ciascun set.</p></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap card">
+ <h2>Condizioni</h2>
+ <p class="small" style="margin-top:-6px">Gli elementi che il modello usa oltre al punteggio Elo. Il verde indica chi è avvantaggiato. Gli ace contano solo se scegli un campo veloce o lento. Se sai di un problema fisico prima che arrivi nei dati, segnalalo: il modello lo tratta come un ritiro recente.</p>
+ <div class="scroll"><table class="cond"><thead><tr><th></th><th class="n" id="cha"></th><th class="n" id="chb"></th></tr></thead><tbody id="cond"></tbody></table></div>
+ <p class="small" id="condnote"></p>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap card">
+ <h2>La tua schedina</h2>
+ <p class="small" style="margin-top:-6px">Aggiungi più previsioni: ogni partita in più abbassa la probabilità di indovinarle tutte.</p>
+ <button class="btn" id="add" type="button">+ Aggiungi questa previsione</button>
+ <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Pronostico</th><th>Superficie</th><th class="n">Prob.</th><th></th></tr></thead><tbody id="slip"></tbody></table></div>
+ <div class="total"><span>Probabilità di indovinarle tutte</span><span class="big" id="tot" style="font-size:36px">—</span></div>
+ <p class="small" id="totnote"></p>
+</div></section>
+
+<section class="band dv" id="davis" style="padding-top:0"><div class="wrap">
+ <h2>Coppa Davis · Final 8 di Bologna</h2>
+ <p class="sub" style="margin-top:0">24–29 novembre, cemento indoor veloce (+1,5 ace sul solito nell'edizione 2025). Ogni sfida: due singolari al meglio dei 3 set e, se serve, il doppio. Puoi cambiare i singolaristi e segnare i risultati man mano che arrivano: le probabilità si aggiornano.</p>
+ <div class="dvgrid" id="dvqf"></div>
+ <h3 class="h3">Chi vince la Coppa</h3>
+ <div class="card scroll"><table><thead><tr><th>Squadra</th><th class="n">Semifinale</th><th class="n">Finale</th><th class="n">Titolo</th></tr></thead><tbody id="dvtitle"></tbody></table></div>
+ <p class="small" id="dvnote">Il doppio non è nel modello (servono dati di doppio): finché non si gioca vale 50 e 50. Semifinali: venerdì 27 alle 16 e sabato 28 alle 12. Finale: domenica 29 alle 15. Formazioni dalle convocazioni ufficiali; per la Cechia la formazione annunciata a Bologna (Lehecka, Machac, Rikl, Pavlasek).</p>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+ <h2>Velocità dei campi nel tempo</h2>
+ <p class="sub" style="margin-top:0">Quanti ace in più (+) o in meno (−) del solito fanno i giocatori in ogni torneo, in punti percentuali. Più è alto, più il campo è veloce. Durante un torneo il valore si aggiorna partita dopo partita.</p>
+ <div class="card scroll"><table class="spd"><thead id="spdh"></thead><tbody id="spdb"></tbody></table></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+ <h2>Quanto è affidabile il modello</h2>
+ <p class="sub" style="margin-top:0" id="caltxt"></p>
+ <div class="card scroll"><table><thead><tr><th>Sicurezza del modello</th><th class="n">Partite</th><th class="n">Ha previsto</th><th class="n">È successo</th></tr></thead><tbody id="cal"></tbody></table></div>
+ <div class="stats" id="stats"></div>
+ <p class="small" id="method"></p>
+</div></section>
+
+<script>
+{
+const SURF={Hard:["#2f6db5","#24568f","Cemento"],Clay:["#c8623a","#9e4a2a","Terra"],Grass:["#4f8f3a","#3b6f2b","Erba"]};
+const SI={Hard:0,Clay:1,Grass:2};
+const LEVELS=[["Rischiosa","#c0392b"],["Incerta","#d9822b"],["Buona","#c9b100"],["Solida","#5aa02c"],["Quasi sicura","#1f8a4c"]];
+const DEF={atp:["Jannik Sinner","Carlos Alcaraz",5],wta:["Aryna Sabalenka","Elena Rybakina",3]};
+const DATA={};
+const st={court:"",speed:0,tour:"atp",a:DEF.atp[0],b:DEF.atp[1],surface:"Hard",bestOf:5};
+let slip=[];try{slip=JSON.parse(localStorage.getItem("slip2")||"[]")}catch(e){}
+try{const t=localStorage.getItem("tour");if(t==="wta"||t==="atp"){st.tour=t;[st.a,st.b,st.bestOf]=DEF[t]}}catch(e){}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct=p=>(p*100).toFixed(p>=.995||p<=.005?1:0)+"%";
+const pc1=p=>(p*100).toFixed(1).replace(".",",")+"%";
+const fmtDate=d=>new Date(d).toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});
+
+function pl(R,n){return R.players[n]||{e:1500,n:0,s:[1500,1500,1500],a:0,l:null,r:0,c:0}}
+const days=d=>d?Math.max(0,Math.round((Date.now()-Date.parse(d))/864e5)):null;
+let FLAGS={};try{FLAGS=JSON.parse(localStorage.getItem("flags")||"{}")}catch(e){}
+const injN=(P,name)=>(P.i||[]).filter(d=>days(d)<=90).length+(name&&FLAGS[name]?1:0);
+function fat(P){                               // ore: partita precedente nel torneo, torneo della settimana prima
+ const d=days(P.l);if(d==null)return[0,0];
+ if(d<=3)return[(P.lm||0)/60,P.pe&&days(P.pe)<=12?(P.pm||0)/60:0];
+ if(d<=9)return[0,(P.tm||0)/60];
+ return[0,0]}
+function prob(tour,a,b,surface,bestOf,speed){
+ if(speed===undefined)speed=st.speed||0;
+ const R=DATA[tour],A=pl(R,a),B=pl(R,b),bo5=bestOf==5?1:0,i=SI[surface];
+ const dO=(A.e-B.e)/100,dS=(A.s[i]-B.s[i])/100,ex=Math.min(Math.log1p(A.n),Math.log1p(B.n))/Math.log1p(200);
+ const now=Date.now(),lay=P=>Math.log1p(Math.min(P.l?Math.max(0,(now-Date.parse(P.l))/864e5):400,400));
+ const x={d_overall:dO,d_surface:dS,d_overall_bo5:dO*bo5,d_surface_bo5:dS*bo5,d_overall_exp:dO*ex,
+  d_sr:(A.r-B.r)/5,d_layoff:lay(A)-lay(B),d_inj:injN(A,a)-injN(B,b),d_pmin:fat(A)[0]-fat(B)[0],d_wk:fat(A)[1]-fat(B)[1],d_tmin:0,d_ace_speed:((A.c||0)-(B.c||0))/3*speed/2,d_form:0,d_mins3:0,d_n10:0,d_overall_layoff:dO*Math.max(lay(A),lay(B))/Math.log1p(400)};
+ return 1/(1+Math.exp(-R.features.reduce((s,f,k)=>s+R.weights[k]*(x[f]||0),0)));
+}
+const fromSet=(s,bo)=>bo==5?s**3*(1+3*(1-s)+6*(1-s)**2):s**2*(1+2*(1-s));
+function sets(pm,bo){let lo=0,hi=1;for(let i=0;i<50;i++){const m=(lo+hi)/2;fromSet(m,bo)<pm?lo=m:hi=m}
+ const s=(lo+hi)/2,q=1-s,need=bo==5?3:2,C=(n,k)=>k==0||k==n?1:C(n-1,k-1)+C(n-1,k),o=[];
+ for(let l=0;l<need;l++){const w=C(need-1+l,l);o.push([`${need}-${l}`,w*s**need*q**l],[`${l}-${need}`,w*q**need*s**l])}
+ return o}
+function level(cal,c){const i=cal.findIndex(k=>c>=k.lo&&c<k.hi);return i<0?cal.length-1:i}
+
+function draw(){
+ const svg=$("court"),W=svg.clientWidth,H=svg.clientHeight;if(!DATA[st.tour]||!W)return;
+ const [c1,c2]=SURF[st.surface],p=prob(st.tour,st.a,st.b,st.surface,st.bestOf),small=W<520;
+ const m=Math.max(14,W*.06),cw=W-2*m,ch=H-2*m*.8,x0=m,y0=m*.8,netX=x0+cw*p;
+ const fs=Math.min(small?60:96,H*.35);
+ const line=(x1,y1,x2,y2,w=2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="${w}" opacity=".9"/>`;
+ const sl=ch*.125,sx=cw*.23,fav=p>=.5?0:1;
+ const bx=fav==0?x0+cw*p*.45:netX+(x0+cw-netX)*.55,by=y0+ch*.72;
+ svg.innerHTML=`<rect width="${W}" height="${H}" fill="${c2}"/>
+ <rect x="${x0}" y="${y0}" width="${cw*p}" height="${ch}" fill="${c1}"/>
+ <rect x="${netX}" y="${y0}" width="${cw*(1-p)}" height="${ch}" fill="${c1}" opacity=".72"/>
+ <rect x="${x0}" y="${y0}" width="${cw}" height="${ch}" fill="none" stroke="#fff" stroke-width="2.5"/>
+ ${line(x0,y0+sl,x0+cw,y0+sl)}${line(x0,y0+ch-sl,x0+cw,y0+ch-sl)}
+ ${line(x0+sx,y0+sl,x0+sx,y0+ch-sl)}${line(x0+cw-sx,y0+sl,x0+cw-sx,y0+ch-sl)}
+ ${line(x0+sx,y0+ch/2,x0+cw-sx,y0+ch/2)}
+ <line x1="${netX}" y1="${y0-8}" x2="${netX}" y2="${y0+ch+8}" stroke="#fff" stroke-width="5"/>
+ <line x1="${netX+3}" y1="${y0-8}" x2="${netX+3}" y2="${y0+ch+8}" stroke="#000" stroke-opacity=".25" stroke-width="2"/>
+ <ellipse cx="${bx+3}" cy="${by+fs*.14}" rx="${fs*.12}" ry="${fs*.04}" fill="#000" opacity=".25"/>
+ <circle cx="${bx}" cy="${by}" r="${fs*.11}" fill="#d4ef3a"/>
+ <path d="M${bx-fs*.1} ${by-fs*.03} q${fs*.1} ${fs*.07} ${fs*.2} 0" fill="none" stroke="#fff" stroke-width="1.5" opacity=".8"/>`;
+}
+
+const lastSpeed=h=>{const y=Object.keys(h).sort().pop();return h[y]};
+const speedWord=v=>v>=1?"veloce":v<=-1?"lento":"medio";
+function renderSpeedTable(){
+ const R=DATA[st.tour],w=st.tour==="wta";
+ const pick=(w?["Australian Open","Roland Garros","Wimbledon","US Open","Indian Wells","Miami","Madrid","Rome","Cincinnati","Beijing","Wuhan","Doha","Dubai"]:["Australian Open","Roland Garros","Wimbledon","US Open","Indian Wells Masters","Miami Masters","Monte Carlo Masters","Madrid Masters","Rome Masters","Canada Masters","Cincinnati Masters","Shanghai Masters","Paris Masters","ATP Finals"]).filter(n=>R.speed[n]);
+ const ys=[2019,2021,2022,2023,2024,2025,2026];
+ const col=v=>v==null?"transparent":`color-mix(in srgb,${v>0?"#c0392b":"#2f6db5"} ${Math.min(70,Math.abs(v)*28)}%,transparent)`;
+ $("spdh").innerHTML=`<tr><th>Torneo</th>${ys.map(y=>`<th class="n">${y}</th>`).join("")}</tr>`;
+ $("spdb").innerHTML=pick.map(n=>{const h=R.speed[n];return`<tr><td>${esc(n.replace(" Masters",""))}</td>${ys.map(y=>{const v=h[y];return`<td class="n h" style="background:${col(v)}">${v==null?"—":(v>0?"+":"")+v.toFixed(1).replace(".",",")}</td>`}).join("")}</tr>`}).join("");
+}
+function setTourUI(){
+ const R=DATA[st.tour],w=st.tour==="wta";
+ const sp=Object.entries(R.speed).sort((a,b)=>a[0].localeCompare(b[0]));
+ $("court-sel").innerHTML=`<option value="">Velocità media</option>`+sp.map(([n,h])=>{const v=lastSpeed(h);return`<option value="${esc(n)}">${esc(n)} · ${speedWord(v)} (${v>0?"+":""}${v.toFixed(1).replace(".",",")})</option>`}).join("");
+ $("court-sel").value=st.court&&R.speed[st.court]?st.court:"";st.speed=st.court&&R.speed[st.court]?lastSpeed(R.speed[st.court]):0;
+ renderSpeedTable();
+ $("names").innerHTML=Object.entries(R.players).filter(([,p])=>p.a).sort((x,y)=>y[1].e-x[1].e).map(([n])=>`<option value="${esc(n)}">`).join("");
+ $("la").textContent=w?"Giocatrice 1":"Giocatore 1";$("lb").textContent=w?"Giocatrice 2":"Giocatore 2";
+ $("bo").style.display=w?"none":"";
+ $("pa").value=st.a;$("pb").value=st.b;
+ const cal=R.calibration,T=R.test,n=cal.reduce((s,c)=>s+c.n,0).toLocaleString("it-IT");
+ $("caltxt").innerHTML=`Test su <b>${n}</b> partite ${w?"WTA":"ATP (circuito maggiore, Challenger e qualificazioni)"} dal gennaio 2026, che il modello non aveva visto. Per ogni livello di sicurezza: quante volte ${w?"la favorita":"il favorito"} ha vinto davvero.`;
+ $("cal").innerHTML=cal.map((c,i)=>`<tr><td><span style="color:${LEVELS[i][1]};font-weight:600">${LEVELS[i][0]}</span> · ${Math.round(c.lo*100)}–${Math.round(c.hi*100)}%</td><td class="n">${c.n.toLocaleString("it-IT")}</td><td class="n">${pct(c.pred)}</td><td class="n"><b>${pct(c.hit)}</b></td></tr>`).join("");
+ const main=T["Nuovo, solo circuito maggiore"],old=T["Modello precedente"],nw=T["Modello nuovo"],bk=T["Bookmaker (stesse partite)"],bm=T["Nuovo (stesse partite)"];
+ const card=(v,l)=>`<div class="stat"><div class="big">${v}</div><div class="small">${l}</div></div>`;
+ $("stats").innerHTML=card(pc1(main.acc),`vincitori indovinati nel 2026, ${w?"WTA":"circuito ATP maggiore"} (${main.n.toLocaleString("it-IT")} partite)`)
+  +(w?card(pc1(old.acc),"il modello precedente, sulle stesse partite"):card(pc1(nw.acc),`su tutte le ${nw.n.toLocaleString("it-IT")} partite ATP 2026, Challenger e qualificazioni compresi`))
+  +(bk?card(`${pc1(bm.acc)} / ${pc1(bk.acc)}`,`modello / bookmaker, sulle ${bk.n.toLocaleString("it-IT")} partite 2026 con quote di chiusura`):"");
+ $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, ritiri e forfait recenti, stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Fattori mentali (tie-break, set decisivi, palle break), gioco in casa, indoor, altitudine e meteo (temperatura e vento, su oltre 20.000 giornate di torneo) sono stati provati su 2025 e 2026 ma non migliorano le previsioni, quindi non sono usati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
+ for(const b of $("tour").children)b.setAttribute("aria-pressed",String(b.dataset.v===st.tour));
+}
+
+function render(){
+ const R=DATA[st.tour];if(!R)return;
+ const p=prob(st.tour,st.a,st.b,st.surface,st.bestOf),fav=p>=.5?st.a:st.b,c=Math.max(p,1-p),li=level(R.calibration,c),k=R.calibration[li],[lab,col]=LEVELS[li];
+ document.documentElement.style.setProperty("--court",SURF[st.surface][0]);
+ document.documentElement.style.setProperty("--court2",SURF[st.surface][1]);
+ $("na").textContent=st.a;$("nb").textContent=st.b;$("ca").textContent=pct(p);$("cb").textContent=pct(1-p);
+ const miss=[st.a,st.b].filter(n=>!R.players[n]),w=st.tour==="wta";
+ $("warn").textContent=st.a===st.b?(w?"Scegli due giocatrici diverse.":"Scegli due giocatori diversi."):miss.length?`Non trovo ${miss.join(" e ")} nei dati ${w?"WTA":"ATP"}: lo considero un punteggio medio (Elo 1500), la previsione è poco affidabile.`:[st.a,st.b].some(n=>!R.players[n].a)?"Uno dei due non gioca da più di un anno: il punteggio potrebbe non essere aggiornato.":"";
+ $("sure").innerHTML=`<h2>Quanto è sicura</h2>
+ <div class="verdict" style="color:${col}">${lab}</div>
+ <div class="meter" style="--c:${col}">${LEVELS.map((_,i)=>`<i class="${i<=li?"on":""}"></i>`).join("")}</div>
+ <p style="margin:0">Favorit${w?"a":"o"}: <b>${esc(fav)}</b> al ${pct(c)}.</p>
+ <p style="margin:8px 0 0">Nel test 2026, quando il modello era sicuro tra il ${Math.round(k.lo*100)}% e il ${Math.round(k.hi*100)}%, ${w?"la favorita":"il favorito"} ha vinto <b>${Math.round(k.hit*100)} volte su 100</b> (${k.n.toLocaleString("it-IT")} partite).</p>`;
+ $("sets").innerHTML=sets(p,st.bestOf).sort((x,y)=>y[1]-x[1]).map(([s,q])=>{const[a,b]=s.split("-").map(Number),wn=a>b?st.a:st.b,sc=a>b?s:`${b}-${a}`;
+  return `<div class="row"><span><b>${sc}</b></span><div class="bar"><b style="width:${(q*100).toFixed(1)}%;${a>b?"":"opacity:.55"}"></b></div><span>${pct(q)}</span></div><div class="small" style="margin:-6px 0 6px">${esc(wn)}</div>`}).join("");
+ for(const g of ["surf","bo"])for(const b of $(g).children)b.setAttribute("aria-pressed",String(b.dataset.v==(g=="surf"?st.surface:st.bestOf)));
+ draw();renderCond();renderSlip();
+}
+function renderCond(){
+ const R=DATA[st.tour],A=pl(R,st.a),B=pl(R,st.b),i=SI[st.surface],w=st.tour==="wta";
+ $("cha").textContent=st.a;$("chb").textContent=st.b;
+ const cls=(x,y,hi)=>x===y||x==null||y==null?["",""]:(hi?x>y:x<y)?["good","bad"]:["bad","good"];
+ const sgn=v=>(v>0?"+":"")+v.toFixed(1).replace(".",",");
+ const dA=days(A.l),dB=days(B.l),iA=injN(A,st.a),iB=injN(B,st.b),fA=fat(A),fB=fat(B);
+ const hrs=v=>v?`${Math.floor(v)}h ${String(Math.round(v%1*60)).padStart(2,"0")}′`:"—";
+ const rows=[
+  [`Elo su ${SURF[st.surface][2].toLowerCase()}`,A.s[i],B.s[i],true,v=>v.toLocaleString("it-IT")],
+  ["Servizio + risposta (punti sopra la media)",A.r,B.r,true,sgn],
+  ["Ultima partita",dA,dB,false,v=>v==null?"—":v===0?"oggi":v===1?"ieri":`${v} giorni fa`],
+  ["Ritiri o forfait negli ultimi 90 giorni",iA,iB,false,v=>v===0?"nessuno":String(v)],
+  ["Ace (punti % sopra la media)",A.c||0,B.c||0,st.speed>0,sgn],
+  ["Durata della partita precedente",fA[0],fB[0],false,hrs],
+  ["Ore giocate nel torneo della settimana prima",fA[1],fB[1],false,hrs]];
+ $("cond").innerHTML=rows.map(([l,a,b,hi,f])=>{const[c1,c2]=cls(a,b,hi);return`<tr><td>${l}</td><td class="n ${c1}">${f(a)}</td><td class="n ${c2}">${f(b)}</td></tr>`}).join("")
+  +`<tr><td>Problema fisico segnalato da te</td>${[st.a,st.b].map(n=>`<td class="n"><label class="flag"><input type="checkbox" data-flag="${esc(n)}"${FLAGS[n]?" checked":""}> ${FLAGS[n]?"sì":"no"}</label></td>`).join("")}</tr>`;
+ const notes=[];
+ for(const[n,P,d,k] of [[st.a,A,dA,iA],[st.b,B,dB,iB]]){
+  if(FLAGS[n])notes.push(`Hai segnalato un problema fisico per ${n}.`);
+  if(k>0&&!FLAGS[n])notes.push(`${n} si è ritirat${w?"a":"o"} o ha dato forfait di recente: possibile problema fisico, il modello ne abbassa le probabilità.`);
+  else if(d!=null&&d>60)notes.push(`${n} non gioca da ${d} giorni: il modello tiene conto della possibile ruggine.`);
+ }
+ if(st.speed){const fast=st.speed>0,big=(A.c||0)>(B.c||0)?st.a:st.b;notes.push(`Campo ${speedWord(st.speed)} (${st.court}): ${fast?"favorisce":"penalizza"} chi fa più ace, cioè ${big}.`)}
+ $("condnote").textContent=notes.join(" ");
+}
+function renderSlip(){
+ const rows=slip.filter(s=>DATA[s.tour]).map((s,i)=>{const p=prob(s.tour,s.a,s.b,s.surface,s.bestOf),f=p>=.5;return{...s,fav:f?s.a:s.b,opp:f?s.b:s.a,p:Math.max(p,1-p),i}});
+ $("slip").innerHTML=rows.length?rows.map(r=>`<tr class="${r.p>=.8?"hl":""}"><td><span class="tag">${r.tour.toUpperCase()}</span> <b>${esc(r.fav)}</b> batte ${esc(r.opp)}</td><td>${SURF[r.surface][2]}, ${r.bestOf} set</td><td class="n">${pct(r.p)}</td><td class="n"><button class="x" data-i="${r.i}" aria-label="Rimuovi">×</button></td></tr>`).join(""):`<tr><td colspan="4" class="small">Ancora vuota: imposta una partita e premi “Aggiungi”.</td></tr>`;
+ const tot=rows.reduce((s,r)=>s*r.p,1);
+ $("tot").textContent=rows.length?pct(tot):"—";
+ const weak=rows.filter(r=>r.p<.7);
+ $("totnote").textContent=!rows.length?"":weak.length?`Per una schedina più sicura togli le partite sotto il 70%: ${weak.map(r=>r.fav).join(", ")}.`:rows.length>1?"Tutte le partite sono sopra il 70%: è la combinazione più solida possibile con queste scelte.":"";
+ try{localStorage.setItem("slip2",JSON.stringify(slip))}catch(e){}
+}
+
+const DV={speed:1.47,teams:{
+ CZE:{n:"Repubblica Ceca",p:["Jiri Lehecka","Tomas Machac","Patrik Rikl","Adam Pavlasek"],s:["Jiri Lehecka","Tomas Machac"]},
+ CAN:{n:"Canada",p:["Felix Auger-Aliassime","Liam Draxl","Alexis Galarneau","Keegan Rice","Duncan Chan"],s:["Felix Auger-Aliassime","Liam Draxl"]},
+ ITA:{n:"Italia",p:["Lorenzo Musetti","Flavio Cobolli","Luciano Darderi","Andrea Vavassori","Simone Bolelli"],s:["Lorenzo Musetti","Flavio Cobolli"]},
+ KOR:{n:"Corea del Sud",p:["Soonwoo Kwon","Seongchan Hong","Hyeon Chung","JiSung Nam","Uisung Park"],s:["Soonwoo Kwon","Seongchan Hong"]},
+ GBR:{n:"Gran Bretagna",p:["Cameron Norrie","Arthur Fery"],s:["Cameron Norrie","Arthur Fery"]},
+ GER:{n:"Germania",p:["Alexander Zverev","Jan-Lennard Struff","Tim Puetz","Kevin Krawietz"],s:["Alexander Zverev","Jan-Lennard Struff"]},
+ AUT:{n:"Austria",p:["Jurij Rodionov","Lukas Neumayer","Joel Schwaerzler","Lucas Miedler","Neil Oberleitner"],s:["Jurij Rodionov","Lukas Neumayer"]},
+ ESP:{n:"Spagna",p:["Carlos Alcaraz","Alejandro Davidovich Fokina","Rafael Jodar","Pedro Martinez","Marcel Granollers"],s:["Carlos Alcaraz","Alejandro Davidovich Fokina"]}},
+ qf:[{id:"qf1",a:"CZE",b:"CAN",w:"Martedì 24 novembre, 16:00"},{id:"qf2",a:"ITA",b:"KOR",w:"Mercoledì 25 novembre, 16:00"},
+     {id:"qf3",a:"GBR",b:"GER",w:"Giovedì 26 novembre, 10:00"},{id:"qf4",a:"AUT",b:"ESP",w:"Giovedì 26 novembre, dalle 17:00"}],
+ res:{qf1:["a",null,null]}};
+try{const sv=JSON.parse(localStorage.getItem("davis2")||"null");if(sv){for(const k in sv.s)if(DV.teams[k])DV.teams[k].s=sv.s[k];DV.res=sv.res||DV.res}}catch(e){}
+const dvSave=()=>{try{localStorage.setItem("davis2",JSON.stringify({s:Object.fromEntries(Object.entries(DV.teams).map(([k,t])=>[k,t.s])),res:DV.res}))}catch(e){}};
+const sp=(a,b)=>prob("atp",a,b,"Hard",3,DV.speed);
+function tieP(A,B,r){
+ r=r||[null,null,null];const TA=DV.teams[A],TB=DV.teams[B];
+ const q=[sp(TA.s[1],TB.s[1]),sp(TA.s[0],TB.s[0]),0.5].map((p,i)=>r[i]==="a"?1:r[i]==="b"?0:p);
+ return q[0]*q[1]+(q[0]*(1-q[1])+(1-q[0])*q[1])*q[2];
+}
+function renderDavis(){
+ if(!DATA.atp)return;
+ const pc=p=>p>=.995&&p<1?">99%":p<=.005&&p>0?"<1%":Math.round(p*100)+"%";
+ $("dvqf").innerHTML=DV.qf.map(t=>{
+  const A=DV.teams[t.a],B=DV.teams[t.b],r=DV.res[t.id]||[null,null,null],p=tieP(t.a,t.b,r);
+  const wa=r.filter(x=>x==="a").length,wb=r.filter(x=>x==="b").length,over=wa>=2||wb>=2;
+  const opt=(T,sel)=>T.p.map(n=>`<option${n===sel?" selected":""}>${esc(n)}</option>`).join("");
+  const rub=(i,lab)=>{
+   const pa=i<2?sp(A.s[1-i],B.s[1-i]):.5;
+   const who=i<2?`<div class="rp"><select data-t="${t.a}" data-k="${1-i}" aria-label="${esc(A.n)}">${opt(A,A.s[1-i])}</select><span class="pp">${pc(pa)} – ${pc(1-pa)}</span><select data-t="${t.b}" data-k="${1-i}" aria-label="${esc(B.n)}">${opt(B,B.s[1-i])}</select></div>`:`<div class="rp"><span>${esc(A.n)}</span><span class="pp">50% – 50%</span><span style="text-align:right">${esc(B.n)}</span></div>`;
+   const btn=(v,l)=>`<button type="button" data-tie="${t.id}" data-i="${i}" data-v="${v}" aria-pressed="${r[i]===v||(v===""&&!r[i])}">${l}</button>`;
+   return`<div class="rub"><div class="rl">${lab}</div>${who}<div class="rr">${btn("","Da giocare")}${btn("a","Vince "+esc(A.n))}${btn("b","Vince "+esc(B.n))}</div></div>`};
+  return`<div class="card tie"><h3>${esc(A.n)} – ${esc(B.n)}</h3><div class="when">${t.w}${wa||wb?` · parziale <b>${wa}-${wb}</b>`:""}</div>
+   <div class="tp"><span>${over?(wa>wb?"✓":""):pc(p)}</span><span>${over?(wb>wa?"✓":""):pc(1-p)}</span></div>
+   <div class="tbar"><b style="width:${(p*100).toFixed(1)}%"></b></div>
+   ${over?`<p class="done">Passa ${esc(wa>wb?A.n:B.n)} (${Math.max(wa,wb)}-${Math.min(wa,wb)})</p>`:""}
+   ${rub(0,"Singolare 1 · i numeri 2")}${rub(1,"Singolare 2 · i numeri 1")}${rub(2,"Doppio")}</div>`}).join("");
+ // tabellone
+ const qw={};DV.qf.forEach(t=>{const p=tieP(t.a,t.b,DV.res[t.id]);qw[t.a]=p;qw[t.b]=1-p});
+ const half=[[DV.qf[0],DV.qf[1]],[DV.qf[2],DV.qf[3]]],sw={},fw={};
+ half.forEach(([x,y])=>{const L=[x.a,x.b],Rr=[y.a,y.b];
+  for(const X of L)sw[X]=qw[X]*Rr.reduce((s,Y)=>s+qw[Y]*tieP(X,Y),0);
+  for(const Y of Rr)sw[Y]=qw[Y]*L.reduce((s,X)=>s+qw[X]*tieP(Y,X),0)});
+ const H0=[...[DV.qf[0],DV.qf[1]].flatMap(t=>[t.a,t.b])],H1=[...[DV.qf[2],DV.qf[3]].flatMap(t=>[t.a,t.b])];
+ for(const X of H0)fw[X]=sw[X]*H1.reduce((s,Y)=>s+sw[Y]*tieP(X,Y),0);
+ for(const Y of H1)fw[Y]=sw[Y]*H0.reduce((s,X)=>s+sw[X]*tieP(Y,X),0);
+ $("dvtitle").innerHTML=Object.keys(DV.teams).sort((a,b)=>fw[b]-fw[a]).map(k=>`<tr><td><b>${esc(DV.teams[k].n)}</b> <span class="small">${esc(DV.teams[k].s.join(", "))}</span></td><td class="n">${pc(qw[k])}</td><td class="n">${pc(sw[k])}</td><td class="n"><b>${pc(fw[k])}</b></td></tr>`).join("");
+}
+$("dvqf").addEventListener("change",e=>{const t=e.target.dataset.t;if(t){DV.teams[t].s[+e.target.dataset.k]=e.target.value;dvSave();renderDavis()}});
+$("dvqf").addEventListener("click",e=>{const b=e.target.closest("button[data-tie]");if(!b)return;const r=DV.res[b.dataset.tie]||(DV.res[b.dataset.tie]=[null,null,null]);r[+b.dataset.i]=b.dataset.v||null;dvSave();renderDavis()});
+
+let LIVE=null;
+const NI={};const nidx=t=>NI[t]||(NI[t]=Object.fromEntries(Object.keys(DATA[t].players).map(n=>[n.normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),n])));
+function findName(t,n){const k=String(n).normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),I=nidx(t);if(I[k])return I[k];
+ const p=String(n).split(" "),last=p.slice(1).join("").normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),f=(p[0]||"")[0];
+ const c=Object.keys(DATA[t].players).filter(x=>x.normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase().endsWith(last)&&x[0]===f);return c.length===1?c[0]:n}
+function renderLive(){
+ if(!LIVE){$("livesub").textContent="Dati dal vivo non disponibili.";return}
+ const g=new Date(LIVE.generated);
+ $("livesub").textContent=`Aggiornato alle ${g.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})} del ${g.toLocaleDateString("it-IT")} · ${LIVE.status}`+(LIVE.credits_remaining!=null?` · crediti quote rimasti: ${Math.round(LIVE.credits_remaining)}`:"");
+ const al=(LIVE.alerts||[]).slice(0,6);
+ $("alerts").innerHTML=al.map(a=>`<div class="alert ${a.kind==="tml"?"tml":""}"><time>${esc(a.date)}</time>${esc(a.text)}</div>`).join("");
+ const flagged=new Set(al.filter(a=>a.player).map(a=>a.player));
+ const rows=(LIVE.matches||[]).filter(m=>DATA[m.tour]).map(m=>{
+  const A=findName(m.tour,m.a),B=findName(m.tour,m.b),sp=m.tourney&&DATA[m.tour].speed[m.tourney]?lastSpeed(DATA[m.tour].speed[m.tourney]):0;
+  const pm=prob(m.tour,A,B,m.surface||"Hard",m.best_of||3,sp),pk=m.p_market,fin=pk!=null?pk:pm;
+  const t=new Date(m.commence),when=t.toLocaleDateString("it-IT",{weekday:"short",day:"numeric"})+" "+t.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+  const warn=[A,B,m.a,m.b].some(x=>flagged.has(x)||FLAGS[x])?" ⚠":"";
+  const big=pk!=null&&Math.abs(pk-pm)>=.15;
+  return`<tr data-m="${esc(JSON.stringify({tour:m.tour,a:A,b:B,surface:m.surface,bo:m.best_of,court:m.tourney||""}))}"><td>${when}</td><td><b>${esc(A)}</b> – ${esc(B)}${warn}<div class="small">${esc(m.title)}</div></td><td class="n">${pct(pm)}</td><td class="n${big?" diff":""}">${pk!=null?pct(pk):"—"}</td><td class="n"><b>${esc(fin>=.5?A:B)}</b> ${pct(Math.max(fin,1-fin))}</td></tr>`});
+ $("livet").innerHTML=rows.join("")||`<tr><td colspan="5" class="small">Nessuna partita con quote nelle prossime ore${LIVE.status.startsWith("nessuna")?": per attivarle aggiungi la chiave ODDS_API_KEY (vedi README)":""}.</td></tr>`;
+}
+$("livet").addEventListener("click",async e=>{const tr=e.target.closest("tr[data-m]");if(!tr)return;const m=JSON.parse(tr.dataset.m);
+ if(m.tour!==st.tour)await switchTour(m.tour);st.a=m.a;st.b=m.b;st.surface=m.surface||"Hard";st.bestOf=m.bo||3;st.court=DATA[m.tour].speed[m.court]?m.court:"";
+ $("pa").value=st.a;$("pb").value=st.b;setTourUI();render();document.getElementById("fig").scrollIntoView({behavior:"smooth",block:"center"})});
+
+async function loadTour(t){
+ if(!DATA[t]){document.body.classList.add("loading");
+  try{DATA[t]=await (await fetch(`data/ratings_${t}.json`,{cache:"no-store"})).json()}catch(e){$("warn").textContent="Non riesco a caricare i dati: ricarica la pagina.";return}
+  finally{document.body.classList.remove("loading")}}
+}
+async function switchTour(t){
+ if(t===st.tour&&DATA[t])return;
+ await loadTour(t);st.tour=t;st.court="";[st.a,st.b,st.bestOf]=DEF[t];
+ try{localStorage.setItem("tour",t)}catch(e){}
+ setTourUI();render();
+}
+function setPlayer(k,v){const R=DATA[st.tour];v=v.trim();const hit=Object.keys(R.players).find(n=>n.toLowerCase()===v.toLowerCase());st[k]=hit||v;render()}
+$("tour").addEventListener("click",e=>{const v=e.target.closest("button")?.dataset.v;if(v)switchTour(v)});
+$("pa").addEventListener("change",e=>setPlayer("a",e.target.value));
+$("pb").addEventListener("change",e=>setPlayer("b",e.target.value));
+$("surf").addEventListener("click",e=>{if(e.target.dataset.v){st.surface=e.target.dataset.v;render()}});
+$("bo").addEventListener("click",e=>{if(e.target.dataset.v){st.bestOf=+e.target.dataset.v;render()}});
+$("court-sel").addEventListener("change",e=>{const R=DATA[st.tour];st.court=e.target.value;st.speed=st.court?lastSpeed(R.speed[st.court]):0;render()});
+$("cond").addEventListener("change",e=>{const n=e.target.dataset.flag;if(n===undefined)return;if(e.target.checked)FLAGS[n]=Date.now();else delete FLAGS[n];try{localStorage.setItem("flags",JSON.stringify(FLAGS))}catch(x){}render();renderLive()});
+$("swap").addEventListener("click",()=>{[st.a,st.b]=[st.b,st.a];$("pa").value=st.a;$("pb").value=st.b;render()});
+$("add").addEventListener("click",()=>{if(st.a!==st.b){slip.push({tour:st.tour,a:st.a,b:st.b,surface:st.surface,bestOf:st.tour==="wta"?3:st.bestOf});renderSlip()}});
+$("slip").addEventListener("click",e=>{const b=e.target.closest(".x");if(b){slip.splice(+b.dataset.i,1);renderSlip()}});
+const ro=new ResizeObserver(draw);ro.observe($("court"));
+(async()=>{await Promise.all([loadTour("atp"),loadTour("wta")]);
+ try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json()}catch(e){LIVE=null}
+ setTourUI();render();renderDavis();renderLive();
+ if(Date.now()>Date.parse("2026-11-30"))$("davis").style.display="none";
+ setInterval(async()=>{try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json();renderLive()}catch(e){}},5*60*1000)})();
+}
+</script></body></html>
