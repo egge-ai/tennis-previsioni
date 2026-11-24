@@ -24,12 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Trova la cartella del progetto
+      - name: Metti in ordine i file del progetto
         run: |
-          F=$(find . -path '*/pipeline/download.py' -not -path './.git/*' | head -1)
-          if [ -z "$F" ]; then echo "::error::Non trovo pipeline/download.py: carica anche la cartella pipeline"; exit 1; fi
-          R=$(dirname "$(dirname "$F")"); echo "Progetto in: $R"
-          echo "ROOT=$R" >> "$GITHUB_ENV"
+          mkdir -p pipeline docs/data
+          for f in download.py model.py train.py live.py; do [ -f "$f" ] && mv "$f" pipeline/; done
+          [ -f index.html ] && mv index.html docs/
+          [ -f .nojekyll ] && mv .nojekyll docs/
+          for f in ratings_atp.json ratings_wta.json live.json meta.json; do [ -f "$f" ] && mv "$f" docs/data/; done
+          ls pipeline docs docs/data
+          if [ ! -f pipeline/download.py ] || [ ! -f docs/index.html ]; then echo "::error::Mancano dei file del progetto"; exit 1; fi
 
       - uses: actions/setup-python@v5
         with:
@@ -42,14 +45,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.ROOT }}/cache
-            ${{ env.ROOT }}/state
-            ${{ env.ROOT }}/docs/data
+            cache
+            state
+            docs/data
           key: dati-${{ github.run_id }}
           restore-keys: dati-
 
       - name: Scarica dati TML
-        working-directory: ${{ env.ROOT }}
         run: |
           if [ ! -f cache/2015.csv ] || [ "$(date -u +%H%M)" -lt "0415" -a "$(date -u +%H)" = "04" ]; then
             python pipeline/download.py --mode full
@@ -58,7 +60,6 @@ jobs:
           fi
 
       - name: Ricalcola i modelli se ci sono risultati nuovi
-        working-directory: ${{ env.ROOT }}
         run: |
           mkdir -p state
           NEW=$(cat cache/*.csv cache/atp_quali/*.csv 2>/dev/null | sha1sum | cut -c1-40)
@@ -70,7 +71,6 @@ jobs:
           fi
 
       - name: Quote e allarmi dal vivo
-        working-directory: ${{ env.ROOT }}
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: python pipeline/live.py --cache cache --out docs/data --state state
@@ -86,7 +86,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ env.ROOT }}/docs
+          path: docs
 
       - id: deploy
         uses: actions/deploy-pages@v4
