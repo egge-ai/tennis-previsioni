@@ -9,6 +9,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: aggiorna
@@ -59,19 +60,15 @@ jobs:
           else
             python -u pipeline/download.py --mode live
           fi
-          ls -la cache | head -20
 
       - name: Ricalcola i modelli se ci sono risultati nuovi
         timeout-minutes: 15
         continue-on-error: true
         run: |
           mkdir -p state
-          echo "Calcolo l'impronta dei dati..."
           NEW=$(find cache -name '*.csv' -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -c1-40)
           OLD=$(cat state/data_hash.txt 2>/dev/null || true)
-          echo "Impronta: $NEW (prima: $OLD)"
           if [ "$NEW" != "$OLD" ] || [ ! -f docs/data/ratings_atp.json ]; then
-            echo "Ricalcolo i modelli..."
             timeout --signal=INT 720 python -X faulthandler -u pipeline/train.py --cache cache --out docs/data && echo "$NEW" > state/data_hash.txt
           else
             echo "Nessun risultato nuovo: modelli invariati."
@@ -93,9 +90,9 @@ jobs:
             git add state_keepalive.txt && git commit -m "promemoria mensile" && git push || true
           fi
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
 
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
