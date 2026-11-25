@@ -205,6 +205,8 @@ class State:
         self.pts = {}
         self.ht = {}
         self.boost = {}
+        self.S = defaultdict(float); self.R = defaultdict(float); self.nsr = defaultdict(int)
+        self.mu = {"Hard": 0.45, "Clay": 0.38, "Grass": 0.55}           # logit della % media di punti vinti al servizio
         self.seas_surf = defaultdict(set)                      # (giocatore, anno) -> superfici giocate
         self.injk = defaultdict(list)                          # (data, peso): W/O pesa più di un ritiro in partita
         self.last_surf = defaultdict(lambda: deque(maxlen=3))
@@ -340,6 +342,12 @@ class State:
         f["speed2"] = (wsp * cur + (1 - wsp) * (prev[-1] if prev else 0.0)) * 100
         # Elo sui punti
         f["d_ptselo"] = self.rp[a] - self.rp[b]
+        qa, qb = self.sr_probs(a, b, surface)
+        pm2 = min(max(markov_match(qa, qb, ctx["best_of"]), 0.005), 0.995)
+        f["d_pt2"] = math.log(pm2 / (1 - pm2))
+        f["d_style"] = self.S[a] * (-self.R[b]) - self.S[b] * (-self.R[a])
+        f["unc2"] = ((30 / (self.n[a] + 5)) ** 2 + (min((date - self.last[a]).days, 365) / 365 if a in self.last else 1.0)
+                     + (30 / (self.n[b] + 5)) ** 2 + (min((date - self.last[b]).days, 365) / 365 if b in self.last else 1.0))
         # incertezza (stile Glicko): poche partite o lungo stop → Elo meno affidabile
         rd = lambda p: min(1.0, math.sqrt((30 / (self.n[p] + 5)) ** 2 + ((date - self.last[p]).days / 365 if p in self.last else 1.0)))
         f["unc"] = (rd(a) + rd(b)) / 2
@@ -377,6 +385,20 @@ class State:
 
     def injury(self, p, date):
         self.inj[p].append(date)
+
+    def sr_probs(self, a, b, surface):
+        mu = self.mu.get(surface, 0.45)
+        sg = lambda z: 1 / (1 + math.exp(-z))
+        return sg(mu + self.S[a] - self.R[b]), sg(mu + self.S[b] - self.R[a])
+
+    def sr_update(self, server, returner, won, tot, surface):
+        if tot < 20: return
+        pa, _ = self.sr_probs(server, returner, surface)
+        res = won / tot - pa
+        g = res / max(pa * (1 - pa), 0.05)                              # passo nel logit
+        ks = 0.5 / math.sqrt(1 + self.nsr[server] / 10); kr = 0.5 / math.sqrt(1 + self.nsr[returner] / 10)
+        self.S[server] += ks * 0.25 * g; self.R[returner] -= kr * 0.25 * g
+        self.mu[surface] = self.mu.get(surface, 0.45) + 0.002 * g     # media del circuito che si adatta lentamente
 
     def comeback(self, p, date):
         """dopo più di 60 giorni di stop: l'Elo regredisce un po' verso la media e per 5 partite si aggiorna più in fretta."""
@@ -516,6 +538,10 @@ def build(df):
                     if st.sp2_n[kk] >= 10: st.sp2_hist[t.tourney_name][t.date.year] = st.sp2_sum[kk] / st.sp2_n[kk]
         if wht[i] == wht[i] and wht[i] > 150: st.ht[w] = int(wht[i])
         if lht[i] == lht[i] and lht[i] > 150: st.ht[l] = int(lht[i])
+        if S is not None and not np.isnan(S[i]).any() and t.surface in SURFACES:
+            st.sr_update(w, l, S[i, 1] + S[i, 2], S[i, 0], t.surface)
+            st.sr_update(l, w, S[i, 4] + S[i, 5], S[i, 3], t.surface)
+            st.nsr[w] += 1; st.nsr[l] += 1
         if wpts[i] == wpts[i]: st.pts[w] = float(wpts[i])
         if lpts[i] == lpts[i]: st.pts[l] = float(lpts[i])
         if not t.incomplete:
@@ -543,9 +569,9 @@ def build(df):
 # ------------------------------------------------------------------ modello
 # variabili finali: ognuna migliora la log loss sia nel 2025 sia nel 2026 (test fuori campione)
 FINAL = {"atp": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_hang", "d_first_surf", "d_shock", "d_ptselo",
-                 "d_mov", "d_pmin", "d_home"],
+                 "d_mov", "d_pmin", "d_home", "d_pt2"],
          "wta": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_mov", "d_wk", "d_first_surf", "d_ptselo",
-                 "d_marathon", "d_home"]}
+                 "d_marathon", "d_home", "d_pt2"]}
 # scelta con walk-forward 2019-2026 (addestramento solo sul passato) e bootstrap accoppiato sulla log loss
 BASE = ["d_overall", "d_surface", "d_overall_bo5", "d_surface_bo5", "d_overall_exp"]
 EXTRA = ["d_sr", "d_layoff",                                  # già nel modello v2
@@ -576,7 +602,7 @@ def design(X, feats):
          "d_jet": X["d_jet"] / 3, "d_srv_speed2": X["d_srv"] / 5 * X["speed2"], "d_ptselo": X["d_ptselo"] / 100,
          "d_overall_unc": X["d_overall"] / 100 * X["unc"], "d_load": X["d_load"],
          "d_marathon": X["d_marathon"], "d_first_surf": X["d_first_surf"], "d_surf_sh": X["d_surf_sh"] / 100,
-         "d_jet6": X["d_jet6"], "d_preslam": X["d_preslam"],
+         "d_jet6": X["d_jet6"], "d_preslam": X["d_preslam"], "d_pt2": X["d_pt2"], "d_style": X["d_style"],
          "d_mov": X["d_mov"] / 100, "d_h2h": X["d_h2h"], "d_rank": X["d_rank"], "d_q": X["d_q"], "d_pt": X["d_pt"],
          "d_overall_wind": X["d_overall"] / 100 * X["windy"], "d_overall_heat": X["d_overall"] / 100 * X["heat"]}
     return np.column_stack([np.asarray(M[f], dtype=float) for f in feats])
@@ -685,7 +711,7 @@ def main():
                       "pts": st.pts.get(p, 0), "mov": round(st.rg[p], 1),
                       "ik": [[d.strftime("%Y-%m-%d"), wt] for d, wt in st.injk[p] if (last - d).days <= 120],
                       "td": st.title_date[p].strftime("%Y-%m-%d") if p in st.title_date else None,
-                      "ht": st.ht.get(p), "rp": round(st.rp[p], 1),
+                      "ht": st.ht.get(p), "rp": round(st.rp[p], 1), "S": round(st.S[p], 4), "R": round(st.R[p], 4),
                       "ss": sorted(st.seas_surf.get((p, last.year), set())), "ls": list(st.last_surf[p]),
                       "spw": round(0.62 + (st.spw[p] - 0.62) * st.nst[p] / (st.nst[p] + 15), 4),
                       "rpw": round(0.38 + (st.rpw[p] - 0.38) * st.nst[p] / (st.nst[p] + 15), 4),
@@ -705,6 +731,7 @@ def main():
     ok = (mm > 20) & (sp > 40) & ~df["incomplete"]
     out["sec_per_point"] = round(float((mm[ok] * 60 / sp[ok]).median()), 1)
     out["home"] = {k: v for k, v in HOME.items()}
+    out["mu"] = {k: round(v, 4) for k, v in st.mu.items()}
     out["court_speed"] = {t: {str(y): round(v * 100, 2) for y, v in sorted(h.items())} for t, h in st.sp_hist.items()
                           if len(h) >= 3 and st.sp_n[(t, max(h))] >= 15}
     path = os.path.join(args.out, f"ratings_{args.tour}.json")

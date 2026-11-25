@@ -167,6 +167,44 @@ def fetch_news(names, state, every_min=30):
     return news
 
 
+def archive(fresh, out_dir, state_dir, cache):
+    """apertura (prima quota vista), chiusura (ultima prima dell'inizio) e previsione del modello congelata."""
+    p = os.path.join(state_dir, "odds_log.json")
+    log = json.load(open(p)) if os.path.exists(p) else {}
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p_ in (here, os.path.dirname(here), os.path.join(os.path.dirname(here), "pipeline")): sys.path.insert(0, p_)
+        from predict import Predictor
+        P = Predictor(out_dir)
+        meta = json.load(open(os.path.join(out_dir, "meta.json"))) if os.path.exists(os.path.join(out_dir, "meta.json")) else {}
+    except Exception as e:
+        print("  previsioni non disponibili:", e, file=sys.stderr); P, meta = None, {}
+    smap = surface_map(cache)
+    for eid, e in fresh.items():
+        if parse(e["commence"]) <= NOW: continue                        # a partita iniziata non si aggiorna più
+        rec = log.get(eid)
+        if rec is None:
+            tn, surf = guess_tourney(e["title"], smap)
+            bo = 5 if e["tour"] == "atp" and any(x in e["title"].lower() for x in SLAMS) else 3
+            mp, fs = None, False
+            if P:
+                A, B = P.find(e["tour"], e["a"]), P.find(e["tour"], e["b"])
+                if A and B:
+                    mp = round(P.prob(e["tour"], A, B, surf, bo, tn), 4)
+                    if surf in ("Clay", "Grass"):
+                        pl = P.R[e["tour"]]["players"]
+                        fs = (surf not in (pl[A].get("ss") or [])) != (surf not in (pl[B].get("ss") or []))
+            rec = log[eid] = {"tour": e["tour"], "title": e["title"], "commence": e["commence"], "a": e["a"], "b": e["b"],
+                              "surface": surf, "open_p": e["p_market"], "open_t": iso(NOW), "model_p": mp, "first_surf": fs,
+                              "model_version": meta.get("trained")}
+        rec["close_p"], rec["close_t"] = e["p_market"], iso(NOW)
+        rec["snapshots"] = rec.get("snapshots", 0) + 1
+    # tiene 18 mesi di archivio
+    cut = (NOW - dt.timedelta(days=550)).isoformat()
+    log = {k: v for k, v in log.items() if v["commence"] >= cut[:10]}
+    json.dump(log, open(p, "w"), separators=(",", ":"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default="cache"); ap.add_argument("--out", default="docs/data"); ap.add_argument("--state", default="state")
@@ -223,6 +261,7 @@ def main():
             for eid, e in fresh.items():
                 h = state["hist"].setdefault(eid, [])
                 h.append([iso(NOW), e["p_market"]])
+            archive(fresh, a.out, a.state, a.cache)
             state["events"], state["last_poll"], state["remaining"] = fresh, iso(NOW), remaining
             matches = list(fresh.values())
         # pulizia storico (48 ore)
@@ -254,6 +293,14 @@ def main():
     out = {"generated": iso(NOW), "status": status, "credits_remaining": state.get("remaining"), "matches": matches, "alerts": alerts[:40]}
     json.dump(out, open(os.path.join(a.out, "live.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     json.dump(state, open(sp, "w"), separators=(",", ":"))
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p_ in (here, os.path.dirname(here)): sys.path.insert(0, p_)
+        import clv
+        r = clv.run(a.cache, a.state, a.out)
+        if r: print(f"verifica CLV: {r['con_risultato']} partite con risultato su {r['in_archivio']} in archivio")
+    except Exception as e:
+        print("  verifica CLV: errore", e, file=sys.stderr)
     print(f"live.json: {len(matches)} partite, {len(alerts)} allarmi · {status}")
 
 

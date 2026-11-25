@@ -32,6 +32,14 @@ Sito di previsioni ATP e WTA che si aggiorna da solo, ogni 15 minuti, senza un c
   aggiungeva nulla. Il modello resta accanto come confronto; quando non ci sono quote (qualificazioni,
   Challenger) decide lui.
 
+## Verifica contro il mercato (Closing Line Value)
+
+Per ogni partita con quote il sistema salva, in un archivio privato (non pubblicato):
+la prima quota vista (apertura), l'ultima prima dell'inizio (chiusura) e la previsione del modello
+congelata all'apertura, con la versione del modello. Quando arriva il risultato, la sezione
+"Verifica dal vivo" del sito mostra log loss di modello, apertura e chiusura e il CLV, anche per nicchie
+(prima partita stagionale su terra/erba, favoriti netti, partite equilibrate, forti disaccordi).
+
 ## Come metterlo online (una volta sola, circa 15 minuti)
 
 1. **Crea un account GitHub** su github.com, se non lo hai.
@@ -96,6 +104,8 @@ http://localhost:8000.
 - `pipeline/download.py`: scarica i CSV TML in `cache/`
 - `pipeline/model.py`: il modello (Elo, servizio/risposta, infortuni, stanchezza, velocità del campo)
 - `pipeline/train.py`: addestra ATP e WTA e scrive `docs/data/ratings_*.json`
-- `pipeline/live.py`: quote, avvisi, partite in programma → `docs/data/live.json`
+- `pipeline/live.py`: quote, avvisi, partite in programma → `docs/data/live.json`; archivio quote
+- `pipeline/predict.py`: la previsione del modello (stessa formula del sito), per congelarla nell'archivio
+- `pipeline/clv.py`: confronto con apertura e chiusura → `docs/data/clv.json`
 - `docs/index.html`: il sito
 - `.github/workflows/aggiorna.yml`: il lavoro automatico ogni 15 minuti

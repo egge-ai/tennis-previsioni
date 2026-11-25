@@ -121,7 +121,7 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
 <section class="band" style="padding-top:0"><div class="wrap grid">
  <div class="card" id="sure"></div>
  <div class="card"><h2>Proiezioni</h2><div id="sets"></div><div class="pgrid" id="proj"></div>
-  <p class="small" id="projnote">Calcolate punto per punto da servizio e risposta dei due, tarate sulla probabilità di vittoria.</p></div>
+  <p class="small" id="projnote">Calcolate punto per punto da servizio e risposta dei due, aggiustati per la forza dell'avversario e tarati sulla probabilità di vittoria.</p></div>
 </div></section>
 
 <section class="band" style="padding-top:0"><div class="wrap card">
@@ -147,6 +147,13 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
  <h3 class="h3">Chi vince la Coppa</h3>
  <div class="card scroll"><table><thead><tr><th>Squadra</th><th class="n">Semifinale</th><th class="n">Finale</th><th class="n">Titolo</th></tr></thead><tbody id="dvtitle"></tbody></table></div>
  <p class="small" id="dvnote">Il doppio non è nel modello (servono dati di doppio): finché non si gioca vale 50 e 50. Semifinali: venerdì 27 alle 16 e sabato 28 alle 12. Finale: domenica 29 alle 15. Formazioni dalle convocazioni ufficiali; per la Cechia la formazione annunciata a Bologna (Lehecka, Machac, Rikl, Pavlasek).</p>
+</div></section>
+
+<section class="band" id="clv" style="padding-top:0"><div class="wrap">
+ <h2>Verifica dal vivo contro il mercato</h2>
+ <p class="sub" style="margin-top:0">Per ogni partita con quote il sistema congela la previsione del modello all'apertura delle quote e la confronta con la quota di chiusura e con il risultato. CLV positivo vuol dire che il mercato, prima dell'inizio, si è spostato verso il modello: è il segnale più affidabile di un vantaggio reale.</p>
+ <div class="card scroll"><table><thead><tr><th>Gruppo</th><th class="n">Partite</th><th class="n">Log loss modello</th><th class="n">Apertura</th><th class="n">Chiusura</th><th class="n">CLV medio</th><th class="n">CLV positivo</th></tr></thead><tbody id="clvt"></tbody></table></div>
+ <p class="small" id="clvnote">Più basso è il log loss, meglio è. Servono alcune centinaia di partite prima di trarre conclusioni.</p>
 </div></section>
 
 <section class="band" style="padding-top:0"><div class="wrap">
@@ -180,7 +187,8 @@ const pc1=p=>(p*100).toFixed(1).replace(".",",")+"%";
 const fmtDate=d=>new Date(d).toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});
 
 function pl(R,n){return R.players[n]||{e:1500,n:0,s:[1500,1500,1500],a:0,l:null,r:0,c:0}}
-const days=d=>d?Math.max(0,Math.round((Date.now()-Date.parse(d))/864e5)):null;
+const TODAY=(()=>{const n=new Date();return Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())})();
+const days=d=>d?Math.max(0,Math.floor((TODAY-Date.parse(d))/864e5)):null;
 let FLAGS={};try{FLAGS=JSON.parse(localStorage.getItem("flags")||"{}")}catch(e){}
 const injN=(P,name)=>(P.i||[]).filter(d=>days(d)<=90).length+(name&&FLAGS[name]?1:0);
 const injD=(P,name)=>(P.ik||[]).reduce((s,[d,w])=>{const k=days(d);return k!=null&&k<=120?s+w*Math.exp(-k/30):s},0)+(name&&FLAGS[name]?1:0);
@@ -198,10 +206,10 @@ function prob(tour,a,b,surface,bestOf,speed,country){
  if(country===undefined)country=(DATA[tour].home||{})[st.court]||null;
  const R=DATA[tour],A=pl(R,a),B=pl(R,b),bo5=bestOf==5?1:0,i=SI[surface];
  const H=h2h(R,a,b),dO=(A.e-B.e)/100,dS=(A.s[i]-B.s[i])/100,ex=Math.min(Math.log1p(A.n),Math.log1p(B.n))/Math.log1p(200);
- const now=Date.now(),lay=P=>Math.log1p(Math.min(P.l?Math.max(0,(now-Date.parse(P.l))/864e5):400,400));
+ const lay=P=>Math.log1p(Math.min(P.l?days(P.l):400,400));
  const x={d_overall:dO,d_surface:dS,d_overall_bo5:dO*bo5,d_surface_bo5:dS*bo5,d_overall_exp:dO*ex,
   d_mov:((A.g||1500)-(B.g||1500))/100,d_h2h:(H[0]-H[1])/(H[0]+H[1]+2),d_rank:Math.log1p(A.p||0)-Math.log1p(B.p||0),
-  d_injd:injD(A,a)-injD(B,b),
+  d_injd:injD(A,a)-injD(B,b),d_pt2:(()=>{const[qa,qb]=srProbs(R,A,B,surface),w=Math.min(.995,Math.max(.005,markovWin(qa,qb,bestOf)));return Math.log(w/(1-w))})(),
   d_first_surf:(surface==="Clay"||surface==="Grass")?firstSurf(R,A,surface)-firstSurf(R,B,surface):0,
   d_shock:shockS(A,surface)-shockS(B,surface),d_ptselo:((A.rp||1500)-(B.rp||1500))/100,
   d_home:country?(A.ioc===country)-(B.ioc===country):0,d_marathon:mar(A,tour)-mar(B,tour),d_hang:hang(A)-hang(B),d_ht:A.ht&&B.ht?(A.ht-B.ht)/10:0,
@@ -231,6 +239,14 @@ function setDist(pa,pb,aFirst){
    for(const[na,nb,pp] of [[a+1,b,p],[a,b+1,1-p]]){const fin=(na>=6&&na-nb>=2)||(nb>=6&&nb-na>=2)||na===7||nb===7,kk=na+"-"+nb;
     if(fin)out[kk]=(out[kk]||0)+pr*pp;else nx[kk]=(nx[kk]||0)+pr*pp}}cur=nx}
  return out}
+const MW=new Map();
+function setWinA(pa,pb){const d=setDist(pa,pb,true);let w=0;for(const k in d){const[x,y]=k.split("-").map(Number);if(x>y)w+=d[k]}return w}
+function markovWin(pa,pb,bo){pa=Math.min(.9,Math.max(.4,Math.round(pa*1000)/1000));pb=Math.min(.9,Math.max(.4,Math.round(pb*1000)/1000));
+ const k=pa+"|"+pb+"|"+bo;if(MW.has(k))return MW.get(k);
+ const s=(setWinA(pa,pb)+(1-setWinA(pb,pa)))/2,need=bo==5?3:2,C=(n,k)=>k==0||k==n?1:C(n-1,k-1)+C(n-1,k);let w=0;
+ for(let j=0;j<need;j++)w+=C(need-1+j,j)*s**need*(1-s)**j;MW.set(k,w);return w}
+const sig=z=>1/(1+Math.exp(-z));
+function srProbs(R,A,B,surface){const mu=(R.mu||{})[surface]??.45;return[sig(mu+(A.S||0)-(B.R||0)),sig(mu+(B.S||0)-(A.R||0))]}
 function matchProj(pa,pb,bo){
  const need=bo==5?3:2;let cur=[{a:0,b:0,g:0,first:1,pr:1,tb:0}],fin=[];
  const D={1:setDist(pa,pb,true),0:setDist(pa,pb,false)};
@@ -246,7 +262,7 @@ function projections(tour,a,b,surface,bo,pFinal){
  const R=DATA[tour],A=pl(R,a),B=pl(R,b);
  if(!R._mr){const act=Object.values(R.players).filter(p=>p.a&&p.rt);R._mr=act.reduce((s,p)=>s+p.rt,0)/act.length;R._ms=act.reduce((s,p)=>s+p.sv,0)/act.length}
  const sa=A.sv||R._ms,ra=A.rt||R._mr,sb=B.sv||R._ms,rb=B.rt||R._mr;
- let pa0=sa-(rb-R._mr),pb0=sb-(ra-R._mr);
+ let [pa0,pb0]=(A.S!=null&&B.S!=null)?srProbs(R,A,B,surface):[sa-(rb-R._mr),sb-(ra-R._mr)];
  let lo=-.25,hi=.25;for(let i=0;i<30;i++){const d=(lo+hi)/2,w=matchProj(Math.min(.95,Math.max(.3,pa0+d)),Math.min(.95,Math.max(.3,pb0-d)),bo).win;if(w<pFinal)lo=d;else hi=d}
  const d=(lo+hi)/2,pa=Math.min(.95,Math.max(.3,pa0+d)),pb=Math.min(.95,Math.max(.3,pb0-d)),M=matchProj(pa,pb,bo);
  const spA=gamePts(pa),spB=gamePts(pb);
@@ -305,7 +321,7 @@ function setTourUI(){
  $("stats").innerHTML=card(pc1(main.acc),`vincitori indovinati nel 2026, ${w?"WTA":"circuito ATP maggiore"} (${main.n.toLocaleString("it-IT")} partite)`)
   +(w?card(pc1(old.acc),"il modello precedente, sulle stesse partite"):card(pc1(nw.acc),`su tutte le ${nw.n.toLocaleString("it-IT")} partite ATP 2026, Challenger e qualificazioni compresi`))
   +(bk?card(`${pc1(bm.acc)} / ${pc1(bk.acc)}`,`modello / bookmaker, sulle ${bk.n.toLocaleString("it-IT")} partite 2026 con quote di chiusura`):"");
- $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, punti in classifica, Elo sui game e sui punti vinti, Elo che regredisce dopo uno stop, prima partita della stagione su terra o erba, cambio di superficie, gioco in casa, titolo vinto la settimana prima (ATP), stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Ogni variabile è stata scelta con un test walk-forward 2019–2026 (sempre addestrando solo sul passato) e un bootstrap sulla log loss. Fattori mentali, indoor, altitudine, meteo, mancini, fusi orari, pre-Slam, precedenti e incertezza del punteggio sono stati provati e scartati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
+ $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, rating di servizio e risposta aggiustati per l'avversario (catena di Markov), punti in classifica, Elo sui game e sui punti vinti, Elo che regredisce dopo uno stop, prima partita della stagione su terra o erba, cambio di superficie, gioco in casa, titolo vinto la settimana prima (ATP), stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Ogni variabile è stata scelta con un test walk-forward 2019–2026 (sempre addestrando solo sul passato) e un bootstrap sulla log loss. Fattori mentali, indoor, altitudine, meteo, mancini, fusi orari, pre-Slam, precedenti e incertezza del punteggio sono stati provati e scartati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
  for(const b of $("tour").children)b.setAttribute("aria-pressed",String(b.dataset.v===st.tour));
 }
 
@@ -427,6 +443,13 @@ const NI={};const nidx=t=>NI[t]||(NI[t]=Object.fromEntries(Object.keys(DATA[t].p
 function findName(t,n){const k=String(n).normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),I=nidx(t);if(I[k])return I[k];
  const p=String(n).split(" "),last=p.slice(1).join("").normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),f=(p[0]||"")[0];
  const c=Object.keys(DATA[t].players).filter(x=>x.normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase().endsWith(last)&&x[0]===f);return c.length===1?c[0]:n}
+async function renderClv(){
+ let C=null;try{C=await (await fetch("data/clv.json",{cache:"no-store"})).json()}catch(e){}
+ if(!C||!C.gruppi){$("clvt").innerHTML=`<tr><td colspan="7" class="small">L'archivio inizia a riempirsi quando sono attive le quote (chiave ODDS_API_KEY).</td></tr>`;return}
+ const f=v=>v==null?"—":String(v).replace(".",",");
+ $("clvt").innerHTML=Object.entries(C.gruppi).map(([k,g])=>`<tr><td>${esc(k)}</td><td class="n">${g.n}</td><td class="n">${g.n?f(g.logloss_modello):"—"}</td><td class="n">${g.n?f(g.logloss_apertura):"—"}</td><td class="n">${g.n?f(g.logloss_chiusura):"—"}</td><td class="n">${g.clv_medio_punti!=null?(g.clv_medio_punti>0?"+":"")+f(g.clv_medio_punti)+" pt":"—"}</td><td class="n">${g.clv_positivo_pct!=null?f(g.clv_positivo_pct)+"%":"—"}</td></tr>`).join("");
+ $("clvnote").textContent=`${C.in_archivio} partite in archivio, ${C.con_risultato} con risultato. Più basso è il log loss, meglio è. Servono alcune centinaia di partite prima di trarre conclusioni.`;
+}
 function renderLive(){
  if(!LIVE){$("livesub").textContent="Dati dal vivo non disponibili.";return}
  const g=new Date(LIVE.generated);
@@ -471,9 +494,10 @@ $("swap").addEventListener("click",()=>{[st.a,st.b]=[st.b,st.a];$("pa").value=st
 $("add").addEventListener("click",()=>{if(st.a!==st.b){slip.push({tour:st.tour,a:st.a,b:st.b,surface:st.surface,bestOf:st.tour==="wta"?3:st.bestOf});renderSlip()}});
 $("slip").addEventListener("click",e=>{const b=e.target.closest(".x");if(b){slip.splice(+b.dataset.i,1);renderSlip()}});
 const ro=new ResizeObserver(draw);ro.observe($("court"));
+window.TP={DATA,prob,lastSpeed};
 (async()=>{await Promise.all([loadTour("atp"),loadTour("wta")]);
  try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json()}catch(e){LIVE=null}
- setTourUI();render();renderDavis();renderLive();
+ setTourUI();render();renderDavis();renderLive();renderClv();
  if(Date.now()>Date.parse("2026-11-30"))$("davis").style.display="none";
  setInterval(async()=>{try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json();renderLive()}catch(e){}},5*60*1000)})();
 }
