@@ -184,20 +184,27 @@ const days=d=>d?Math.max(0,Math.round((Date.now()-Date.parse(d))/864e5)):null;
 let FLAGS={};try{FLAGS=JSON.parse(localStorage.getItem("flags")||"{}")}catch(e){}
 const injN=(P,name)=>(P.i||[]).filter(d=>days(d)<=90).length+(name&&FLAGS[name]?1:0);
 const injD=(P,name)=>(P.ik||[]).reduce((s,[d,w])=>{const k=days(d);return k!=null&&k<=120?s+w*Math.exp(-k/30):s},0)+(name&&FLAGS[name]?1:0);
+const firstSurf=(R,P,s)=>{const sameYear=new Date().getFullYear()===Number(String(R.updated).slice(0,4));return sameYear&&P.ss?(P.ss.includes(s)?0:1):1};
+const shockS=(P,s)=>P.ls&&P.ls.length&&!P.ls.includes(s)&&days(P.l)!=null&&days(P.l)<=10?1:0;
+const mar=(P,t)=>days(P.l)!=null&&days(P.l)<=3&&(P.lm||0)>=(t==="atp"?150:130)?1:0;
 const hang=P=>P.td&&days(P.td)<=9&&P.l===P.td?1:0;
 function fat(P){                               // ore: partita precedente nel torneo, torneo della settimana prima
  const d=days(P.l);if(d==null)return[0,0];
  if(d<=3)return[(P.lm||0)/60,P.pe&&days(P.pe)<=12?(P.pm||0)/60:0];
  if(d<=9)return[0,(P.tm||0)/60];
  return[0,0]}
-function prob(tour,a,b,surface,bestOf,speed){
+function prob(tour,a,b,surface,bestOf,speed,country){
  if(speed===undefined)speed=st.speed||0;
+ if(country===undefined)country=(DATA[tour].home||{})[st.court]||null;
  const R=DATA[tour],A=pl(R,a),B=pl(R,b),bo5=bestOf==5?1:0,i=SI[surface];
  const H=h2h(R,a,b),dO=(A.e-B.e)/100,dS=(A.s[i]-B.s[i])/100,ex=Math.min(Math.log1p(A.n),Math.log1p(B.n))/Math.log1p(200);
  const now=Date.now(),lay=P=>Math.log1p(Math.min(P.l?Math.max(0,(now-Date.parse(P.l))/864e5):400,400));
  const x={d_overall:dO,d_surface:dS,d_overall_bo5:dO*bo5,d_surface_bo5:dS*bo5,d_overall_exp:dO*ex,
   d_mov:((A.g||1500)-(B.g||1500))/100,d_h2h:(H[0]-H[1])/(H[0]+H[1]+2),d_rank:Math.log1p(A.p||0)-Math.log1p(B.p||0),
-  d_injd:injD(A,a)-injD(B,b),d_hang:hang(A)-hang(B),d_ht:A.ht&&B.ht?(A.ht-B.ht)/10:0,
+  d_injd:injD(A,a)-injD(B,b),
+  d_first_surf:(surface==="Clay"||surface==="Grass")?firstSurf(R,A,surface)-firstSurf(R,B,surface):0,
+  d_shock:shockS(A,surface)-shockS(B,surface),d_ptselo:((A.rp||1500)-(B.rp||1500))/100,
+  d_home:country?(A.ioc===country)-(B.ioc===country):0,d_marathon:mar(A,tour)-mar(B,tour),d_hang:hang(A)-hang(B),d_ht:A.ht&&B.ht?(A.ht-B.ht)/10:0,
   d_sr:(A.r-B.r)/5,d_layoff:lay(A)-lay(B),d_inj:injN(A,a)-injN(B,b),d_pmin:fat(A)[0]-fat(B)[0],d_wk:fat(A)[1]-fat(B)[1],d_tmin:0,d_ace_speed:((A.c||0)-(B.c||0))/3*speed/2,d_form:0,d_mins3:0,d_n10:0,d_overall_layoff:dO*Math.max(lay(A),lay(B))/Math.log1p(400)};
  return 1/(1+Math.exp(-R.features.reduce((s,f,k)=>s+R.weights[k]*(x[f]||0),0)));
 }
@@ -298,7 +305,7 @@ function setTourUI(){
  $("stats").innerHTML=card(pc1(main.acc),`vincitori indovinati nel 2026, ${w?"WTA":"circuito ATP maggiore"} (${main.n.toLocaleString("it-IT")} partite)`)
   +(w?card(pc1(old.acc),"il modello precedente, sulle stesse partite"):card(pc1(nw.acc),`su tutte le ${nw.n.toLocaleString("it-IT")} partite ATP 2026, Challenger e qualificazioni compresi`))
   +(bk?card(`${pc1(bm.acc)} / ${pc1(bk.acc)}`,`modello / bookmaker, sulle ${bk.n.toLocaleString("it-IT")} partite 2026 con quote di chiusura`):"");
- $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, punti in classifica, Elo sui game vinti, precedenti tra i due (ATP), ritiri e forfait recenti pesati per gravità e tempo trascorso, titolo vinto la settimana prima (ATP), altezza (WTA), stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Fattori mentali (tie-break, set decisivi, palle break), gioco in casa, indoor, altitudine, meteo, mancini, fusi orari, cambio di superficie, carico di lavoro e incertezza del punteggio sono stati provati su 2025 e 2026 ma non migliorano le previsioni, quindi non sono usati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
+ $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, punti in classifica, Elo sui game e sui punti vinti, Elo che regredisce dopo uno stop, prima partita della stagione su terra o erba, cambio di superficie, gioco in casa, titolo vinto la settimana prima (ATP), stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Ogni variabile è stata scelta con un test walk-forward 2019–2026 (sempre addestrando solo sul passato) e un bootstrap sulla log loss. Fattori mentali, indoor, altitudine, meteo, mancini, fusi orari, pre-Slam, precedenti e incertezza del punteggio sono stati provati e scartati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
  for(const b of $("tour").children)b.setAttribute("aria-pressed",String(b.dataset.v===st.tour));
 }
 
@@ -378,7 +385,7 @@ const DV={speed:1.47,teams:{
  res:{qf1:["a",null,null]}};
 try{const sv=JSON.parse(localStorage.getItem("davis2")||"null");if(sv){for(const k in sv.s)if(DV.teams[k])DV.teams[k].s=sv.s[k];DV.res=sv.res||DV.res}}catch(e){}
 const dvSave=()=>{try{localStorage.setItem("davis2",JSON.stringify({s:Object.fromEntries(Object.entries(DV.teams).map(([k,t])=>[k,t.s])),res:DV.res}))}catch(e){}};
-const sp=(a,b)=>prob("atp",a,b,"Hard",3,DV.speed);
+const sp=(a,b)=>prob("atp",a,b,"Hard",3,DV.speed,"ITA");
 function tieP(A,B,r){
  r=r||[null,null,null];const TA=DV.teams[A],TB=DV.teams[B];
  const q=[sp(TA.s[1],TB.s[1]),sp(TA.s[0],TB.s[0]),0.5].map((p,i)=>r[i]==="a"?1:r[i]==="b"?0:p);
@@ -429,7 +436,7 @@ function renderLive(){
  const flagged=new Set(al.filter(a=>a.player).map(a=>a.player));
  const rows=(LIVE.matches||[]).filter(m=>DATA[m.tour]).map(m=>{
   const A=findName(m.tour,m.a),B=findName(m.tour,m.b),sp=m.tourney&&DATA[m.tour].speed[m.tourney]?lastSpeed(DATA[m.tour].speed[m.tourney]):0;
-  const pm=prob(m.tour,A,B,m.surface||"Hard",m.best_of||3,sp),pk=m.p_market,fin=pk!=null?pk:pm;
+  const pm=prob(m.tour,A,B,m.surface||"Hard",m.best_of||3,sp,(DATA[m.tour].home||{})[m.tourney]||null),pk=m.p_market,fin=pk!=null?pk:pm;
   const t=new Date(m.commence),when=t.toLocaleDateString("it-IT",{weekday:"short",day:"numeric"})+" "+t.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
   const warn=[A,B,m.a,m.b].some(x=>flagged.has(x)||FLAGS[x])?" ⚠":"";
   const big=pk!=null&&Math.abs(pk-pm)>=.15;

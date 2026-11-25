@@ -190,6 +190,8 @@ def load(tml, tour, first_year=2010, weather=None):
 
 
 # ------------------------------------------------------------------ stato dei giocatori
+LAYOFF_ELO = os.environ.get("LAYOFF_ELO", "1") == "1"
+
 class State:
     def __init__(self, k_c=250.0, k_off=5.0, k_shape=0.4):
         self.k_c, self.k_off, self.k_shape = k_c, k_off, k_shape
@@ -202,6 +204,8 @@ class State:
         self.ioc, self.age = {}, {}
         self.pts = {}
         self.ht = {}
+        self.boost = {}
+        self.seas_surf = defaultdict(set)                      # (giocatore, anno) -> superfici giocate
         self.injk = defaultdict(list)                          # (data, peso): W/O pesa più di un ritiro in partita
         self.last_surf = defaultdict(lambda: deque(maxlen=3))
         self.title_date, self.title_tid = {}, {}
@@ -281,6 +285,19 @@ class State:
         f["alt"] = ctx["alt"]
         f["speed"] = self.speed(ctx["tname"], date.year)
         f["d_mov"] = self.rg[a] - self.rg[b]
+        # maratona: partita precedente nello stesso torneo oltre 150 minuti (ATP) / 130 (WTA)
+        thr = 150 if ctx["best_of"] == 5 or ctx.get("tour") == "atp" else 130
+        mar = lambda p: float(self.cur_tid.get(p) == ctx["tid"] and self.last_min[p] >= thr)
+        f["d_marathon"] = mar(a) - mar(b)
+        # prima partita della stagione su terra/erba, contro chi ci ha già giocato
+        if surface in ("Clay", "Grass"):
+            fa_, fb_ = surface not in self.seas_surf[(a, date.year)], surface not in self.seas_surf[(b, date.year)]
+            f["d_first_surf"] = float(fa_) - float(fb_)
+        else:
+            f["d_first_surf"] = 0.0
+        # superficie pesata per esperienza: w = n/(n+c)
+        nsa, nsb = self.ns[(a, surface)], self.ns[(b, surface)]
+        f["d_surf_sh"] = (nsa / (nsa + 20)) * (self.rs[(a, surface)] - self.r[a]) - (nsb / (nsb + 20)) * (self.rs[(b, surface)] - self.r[b])
         # infortuni con gravità e decadimento (mezza vita ~3 settimane)
         injd = lambda p: sum(w * math.exp(-(date - d).days / 30) for d, w in self.injk[p] if 0 <= (date - d).days <= 120)
         f["d_injd"] = injd(a) - injd(b)
@@ -307,6 +324,14 @@ class State:
             dl = abs(lon - self.last_lon[p]); dl = min(dl, 360 - dl)
             return dl / 15
         f["d_jet"] = jet(a) - jet(b)
+        def jet6(p):
+            if jet(p) < 6 or (ctx["start"] - self.last[p]).days > 4: return 0.0
+            return 1.0
+        f["d_jet6"] = jet6(a) - jet6(b)
+        # settimana prima di uno Slam: i big in un 250/500 rendono meno
+        top = lambda pts: float(pts == pts and pts >= 2000)
+        f["preslam"] = float(ctx.get("preslam", False))
+        f["d_preslam"] = f["preslam"] * (top(ctx["pts_a"]) - top(ctx["pts_b"]))
         # velocità 2: punti al servizio vinti sopra le attese nel torneo
         cur_n = self.sp2_n[(ctx["tname"], date.year)]
         cur = self.sp2_sum[(ctx["tname"], date.year)] / cur_n if cur_n else 0.0
@@ -353,10 +378,23 @@ class State:
     def injury(self, p, date):
         self.inj[p].append(date)
 
+    def comeback(self, p, date):
+        """dopo più di 60 giorni di stop: l'Elo regredisce un po' verso la media e per 5 partite si aggiorna più in fretta."""
+        if not LAYOFF_ELO or p not in self.last: return
+        d = (date - self.last[p]).days
+        if d > 60:
+            f = min(0.15, 0.05 * (d - 60) / 60)
+            self.r[p] -= (self.r[p] - 1500) * f
+            for s_ in SURFACES: self.rs[(p, s_)] -= (self.rs[(p, s_)] - 1500) * f
+            self.boost[p] = 5
+
     def update(self, w, l, surface, level, date, minutes, stats, complete, io, score, bp):
         lw = LEVEL_W.get(level, 1.0) * (0.5 if not complete else 1.0)   # i ritiri contano meno
         e = self.expect(self.r[w], self.r[l])
-        self.r[w] += self.k(self.n[w]) * lw * (1 - e); self.r[l] -= self.k(self.n[l]) * lw * (1 - e)
+        bw = 1.5 if self.boost.get(w, 0) > 0 else 1.0; bl = 1.5 if self.boost.get(l, 0) > 0 else 1.0
+        self.r[w] += self.k(self.n[w]) * lw * bw * (1 - e); self.r[l] -= self.k(self.n[l]) * lw * bl * (1 - e)
+        for p in (w, l):
+            if self.boost.get(p, 0) > 0: self.boost[p] -= 1
         if surface in SURFACES:
             sw, sl = (w, surface), (l, surface)
             es = self.expect(self.rs[sw], self.rs[sl])
@@ -399,6 +437,8 @@ class State:
             self.recent[p].append((date, minutes if minutes == minutes and minutes > 0 else 100))
 
 
+TOUR = "atp"
+
 def build(df):
     st = State(); rows = []
     rng = np.random.default_rng(0)
@@ -410,13 +450,21 @@ def build(df):
     wage, lage = num("winner_age"), num("loser_age")
     bpw = np.column_stack([num("w_bpSaved"), num("w_bpFaced")]); bpl = np.column_stack([num("l_bpSaved"), num("l_bpFaced")])
     wpts, lpts = num("winner_rank_points"), num("loser_rank_points")
-    whand = df["winner_hand"].astype(str).to_numpy() if "winner_hand" in df else np.full(len(df), "")
-    lhand = df["loser_hand"].astype(str).to_numpy() if "loser_hand" in df else np.full(len(df), "")
+    whand = df["winner_hand"].fillna("").astype(str).to_numpy() if "winner_hand" in df else np.full(len(df), "")
+    lhand = df["loser_hand"].fillna("").astype(str).to_numpy() if "loser_hand" in df else np.full(len(df), "")
     wht, lht = num("winner_ht"), num("loser_ht")
     went = df["winner_entry"].astype(str).to_numpy() if "winner_entry" in df else np.full(len(df), "")
     lent = df["loser_entry"].astype(str).to_numpy() if "loser_entry" in df else np.full(len(df), "")
     aces = np.column_stack([num("w_ace"), num("w_svpt"), num("l_ace"), num("l_svpt")])
-    wioc, lioc = df["winner_ioc"].astype(str).to_numpy(), df["loser_ioc"].astype(str).to_numpy()
+    wioc, lioc = df["winner_ioc"].fillna("").astype(str).to_numpy(), df["loser_ioc"].fillna("").astype(str).to_numpy()
+    # tornei 250/500 nella settimana prima di uno Slam
+    slam_starts = sorted(df.loc[df["tourney_level"] == "G", "start"].unique())
+    def is_pre(row_start, lvl):
+        if lvl not in ("A", "250", "500"): return False
+        return any(0 < (pd.Timestamp(s0) - row_start).days <= 8 for s0 in slam_starts)
+    tstart = df.drop_duplicates("tourney_id").set_index("tourney_id")
+    pre_t = {tid: is_pre(r.start, r.tourney_level) for tid, r in tstart.iterrows()}
+    pre_slam = df["tourney_id"].map(pre_t).fillna(False).to_numpy()
     for i, t in enumerate(df.itertuples(index=False)):
         w, l = t.winner_name, t.loser_name
         if t.walkover:
@@ -430,6 +478,8 @@ def build(df):
                    tid=t.tourney_id, start=t.start, indoor=t.indoor_f, alt=t.alt, country=t.country, tmax=t.tmax, wind=t.wind, tname=t.tourney_name,
                    age_a=lage[i] if flip else wage[i], age_b=wage[i] if flip else lage[i],
                    ioc_a=lioc[i] if flip else wioc[i], ioc_b=wioc[i] if flip else lioc[i])
+        ctx["preslam"] = bool(pre_slam[i]); ctx["tour"] = TOUR
+        st.comeback(w, t.date); st.comeback(l, t.date)
         f = st.features(a, b, t.surface, t.date, ctx)
         f.update(y=0 if flip else 1, best_of=t.best_of, date=t.date, level=t.tourney_level,
                  complete=not t.incomplete, book_a=(1 - book[i]) if flip else book[i], a=a, b=b)
@@ -443,6 +493,7 @@ def build(df):
         mm = mins[i] if mins[i] == mins[i] and mins[i] > 0 else 40.0 * max(2, len(re.findall(r"\d+-\d+", str(t.score))))
         for p in (w, l): st.fatigue_update(p, t.tourney_id, t.start, t.date, mm)
         for p in (w, l):
+            st.seas_surf[(p, t.date.year)].add(t.surface)
             st.last_surf[p].append(t.surface)
             st.load[p].append((t.date, mm)); st.load[p] = [x for x in st.load[p] if (t.date - x[0]).days <= 21]
             if t.tourney_name in TCOORD: st.last_lon[p] = TCOORD[t.tourney_name][1]
@@ -491,8 +542,11 @@ def build(df):
 
 # ------------------------------------------------------------------ modello
 # variabili finali: ognuna migliora la log loss sia nel 2025 sia nel 2026 (test fuori campione)
-FINAL = {"atp": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_mov", "d_h2h", "d_pmin", "d_injd", "d_hang"],
-         "wta": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_mov", "d_wk", "d_injd", "d_ht"]}
+FINAL = {"atp": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_hang", "d_first_surf", "d_shock", "d_ptselo",
+                 "d_mov", "d_pmin", "d_home"],
+         "wta": ["d_sr", "d_layoff", "d_rank", "d_ace_speed", "d_mov", "d_wk", "d_first_surf", "d_ptselo",
+                 "d_marathon", "d_home"]}
+# scelta con walk-forward 2019-2026 (addestramento solo sul passato) e bootstrap accoppiato sulla log loss
 BASE = ["d_overall", "d_surface", "d_overall_bo5", "d_surface_bo5", "d_overall_exp"]
 EXTRA = ["d_sr", "d_layoff",                                  # già nel modello v2
          "d_inj", "d_age",                                      # fisico
@@ -521,6 +575,8 @@ def design(X, feats):
          "d_left_cg": X["d_left"] * X["cg"], "d_ht": X["d_ht"], "d_ht_speed": X["d_ht"] * X["speed"] / 2,
          "d_jet": X["d_jet"] / 3, "d_srv_speed2": X["d_srv"] / 5 * X["speed2"], "d_ptselo": X["d_ptselo"] / 100,
          "d_overall_unc": X["d_overall"] / 100 * X["unc"], "d_load": X["d_load"],
+         "d_marathon": X["d_marathon"], "d_first_surf": X["d_first_surf"], "d_surf_sh": X["d_surf_sh"] / 100,
+         "d_jet6": X["d_jet6"], "d_preslam": X["d_preslam"],
          "d_mov": X["d_mov"] / 100, "d_h2h": X["d_h2h"], "d_rank": X["d_rank"], "d_q": X["d_q"], "d_pt": X["d_pt"],
          "d_overall_wind": X["d_overall"] / 100 * X["windy"], "d_overall_heat": X["d_overall"] / 100 * X["heat"]}
     return np.column_stack([np.asarray(M[f], dtype=float) for f in feats])
@@ -571,6 +627,7 @@ def main():
     ap.add_argument("--weather", default=None, help="weather.csv creato da fetch_weather.py")
     args = ap.parse_args()
 
+    global TOUR; TOUR = args.tour
     df = load(args.tml, args.tour, weather=args.weather)
     extra = EXTRA + (["d_srv_heat", "d_srv_wind", "d_age_heat", "d_overall_wind", "d_overall_heat"] if args.weather else [])
     if args.book: df = attach_book(df, args.book)
@@ -628,7 +685,8 @@ def main():
                       "pts": st.pts.get(p, 0), "mov": round(st.rg[p], 1),
                       "ik": [[d.strftime("%Y-%m-%d"), wt] for d, wt in st.injk[p] if (last - d).days <= 120],
                       "td": st.title_date[p].strftime("%Y-%m-%d") if p in st.title_date else None,
-                      "ht": st.ht.get(p),
+                      "ht": st.ht.get(p), "rp": round(st.rp[p], 1),
+                      "ss": sorted(st.seas_surf.get((p, last.year), set())), "ls": list(st.last_surf[p]),
                       "spw": round(0.62 + (st.spw[p] - 0.62) * st.nst[p] / (st.nst[p] + 15), 4),
                       "rpw": round(0.38 + (st.rpw[p] - 0.38) * st.nst[p] / (st.nst[p] + 15), 4),
                       "acer": round(0.07 + (st.ace[p] - 0.07) * st.nace[p] / (st.nace[p] + 15), 4),
@@ -646,6 +704,7 @@ def main():
     mm = pd.to_numeric(df.get("minutes"), errors="coerce"); sp = pd.to_numeric(df.get("w_svpt"), errors="coerce") + pd.to_numeric(df.get("l_svpt"), errors="coerce")
     ok = (mm > 20) & (sp > 40) & ~df["incomplete"]
     out["sec_per_point"] = round(float((mm[ok] * 60 / sp[ok]).median()), 1)
+    out["home"] = {k: v for k, v in HOME.items()}
     out["court_speed"] = {t: {str(y): round(v * 100, 2) for y, v in sorted(h.items())} for t, h in st.sp_hist.items()
                           if len(h) >= 3 and st.sp_n[(t, max(h))] >= 15}
     path = os.path.join(args.out, f"ratings_{args.tour}.json")
