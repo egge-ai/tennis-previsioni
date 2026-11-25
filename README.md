@@ -73,6 +73,11 @@ Da lì in poi si aggiorna da solo.
 - **Dati TML.** Il sito pubblica solo probabilità e punteggi calcolati, mai i file grezzi, che restano in
   una cache privata di GitHub. I termini di TennisMyLife permettono l'uso **personale e non commerciale**:
   niente pubblicità sul sito né funzioni a pagamento senza il loro permesso scritto.
+- **File `wta_itf.csv.gz`.** Contiene le partite ITF e di qualificazione WTA 2010–giugno 2026 dall'archivio
+  di Jeff Sackmann (licenza CC BY-NC-SA 4.0: uso non commerciale, citando la fonte). Va caricato nella cartella
+  principale del repository: migliora le valutazioni delle giocatrici meno note. Se manca, il modello funziona lo stesso.
+- **Prova contro i bookmaker.** La pagina contiene solo i risultati aggregati della prova 2021–2026 su circa
+  37.000 partite, non le quote.
 - **Disattivazione automatica.** GitHub sospende i lavori programmati dei repository fermi da 60 giorni. Il
   progetto fa un piccolo salvataggio automatico il primo di ogni mese per evitarlo.
 - **La sezione Coppa Davis** riguarda la Final 8 di Bologna 2026 e sparisce da sola dopo il 30 novembre.

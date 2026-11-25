@@ -21,7 +21,7 @@ import pandas as pd
 
 SURFACES = ["Hard", "Clay", "Grass"]
 LEVEL_W = {"G": 1.1, "F": 1.05, "M": 1.0, "1000": 1.0, "O": 1.0, "500": 0.97, "250": 0.95, "A": 0.95,
-           "D": 0.9, "C": 0.85, "Q": 0.8}
+           "D": 0.9, "C": 0.85, "Q": 0.8, "S": 0.75}
 HOME = {  # torneo -> paese (codice IOC)
  "Australian Open":"AUS","Brisbane":"AUS","Adelaide":"AUS","Hobart":"AUS","Sydney":"AUS","Perth":"AUS",
  "Roland Garros":"FRA","Paris Masters":"FRA","Marseille":"FRA","Montpellier":"FRA","Lyon":"FRA","Metz":"FRA","Rouen":"FRA","Strasbourg":"FRA","Nice":"FRA","Paris Olympics":"FRA",
@@ -144,12 +144,17 @@ def load(tml, tour, first_year=2010, weather=None):
         for y in years:
             if os.path.exists(os.path.join(tml, f"{y}_wta.csv")): files.append((f"{y}_wta.csv", None))
         files += [("wta_ongoing_tourneys.csv", None)]
+    if tour == "wta":                                # archivio Sackmann: ITF + qualificazioni WTA (aiuta molto sulle giocatrici meno note)
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p in [os.environ.get("EXTRA_FILE", ""), os.path.join(here, "wta_itf.csv.gz"), os.path.join(here, "..", "wta_itf.csv.gz"), "wta_itf.csv.gz"]:
+            if p and os.path.exists(p): files.append((os.path.abspath(p), "S")); break
     parts = []
     for f, lvl in files:
         p = os.path.join(tml, f)
         if not os.path.exists(p): continue
         d = pd.read_csv(p, low_memory=False)
         if d.empty: continue
+        if lvl == "S": d = d[pd.to_numeric(d["tourney_date"], errors="coerce") // 10000 >= first_year]
         if lvl: d["tourney_level"] = lvl; d["best_of"] = 3
         parts.append(d)
     df = pd.concat(parts, ignore_index=True)
@@ -660,12 +665,12 @@ def main():
     st, X = build(df)
     yr = X["date"].dt.year
     known = np.minimum(X["log_n_a"], X["log_n_b"]) >= math.log1p(10)
-    main_tour = ~X["level"].isin(["C", "Q"])
+    main_tour = ~X["level"].isin(["C", "Q", "S"])
     val_from = args.test_from - 1
     tr = (yr >= 2013) & (yr < val_from) & known
     va = (yr == val_from) & known
     tr_full = (yr >= 2013) & (yr < args.test_from) & known
-    te = (yr >= args.test_from) & known
+    te = (yr >= args.test_from) & known & (X["level"] != "S")   # ITF non conta nei risultati mostrati
     y = X["y"].to_numpy()
 
     base = BASE if args.tour == "atp" else [f for f in BASE if "bo5" not in f]

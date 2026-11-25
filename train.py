@@ -35,6 +35,7 @@ def clean(o):
 def compact(R):
     P = {}
     for k, v in R["players"].items():
+        if R["tour"] == "wta" and v["elo"] < (1400 if v["active"] else 1550): continue   # niente ITF minori: file più leggero
         o = {"e": round(v["elo"]), "n": v["n"], "s": [round(v["surface"][s]) for s in ["Hard", "Clay", "Grass"]],
              "a": int(v["active"]), "l": v["last"], "r": v["sr"], "c": v["ace"],
              "lm": v["lm"], "tm": v["tm"], "pm": v["pm"], "pe": v["pe"],

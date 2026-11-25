@@ -149,6 +149,13 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
  <p class="small" id="dvnote">Il doppio non è nel modello (servono dati di doppio): finché non si gioca vale 50 e 50. Semifinali: venerdì 27 alle 16 e sabato 28 alle 12. Finale: domenica 29 alle 15. Formazioni dalle convocazioni ufficiali; per la Cechia la formazione annunciata a Bologna (Lehecka, Machac, Rikl, Pavlasek).</p>
 </div></section>
 
+<section class="band" id="studio" style="padding-top:0"><div class="wrap">
+ <h2>Prova su 6 anni contro i bookmaker</h2>
+ <p class="sub" style="margin-top:0">Circa 37.000 partite 2021–2026 con quote di apertura e chiusura. Ogni anno il modello è stato addestrato solo sugli anni precedenti, quindi è come se avesse previsto "al buio".</p>
+ <div class="card scroll"><table><thead><tr><th>Circuito</th><th>Gruppo</th><th class="n">Partite</th><th class="n">Indovinate modello</th><th class="n">Apertura</th><th class="n">Chiusura</th><th class="n">Log loss modello</th><th class="n">Chiusura</th></tr></thead><tbody id="studiot"></tbody></table></div>
+ <p class="small" id="studionote">In sintesi: il mercato di chiusura resta più preciso del modello in ogni gruppo. Quando ci sono le quote, la stima più affidabile è la quota senza margine; il modello serve dove le quote mancano, per le proiezioni (set, game, ace) e per capire perché una partita è equilibrata.</p>
+</div></section>
+
 <section class="band" id="clv" style="padding-top:0"><div class="wrap">
  <h2>Verifica dal vivo contro il mercato</h2>
  <p class="sub" style="margin-top:0">Per ogni partita con quote il sistema congela la previsione del modello all'apertura delle quote e la confronta con la quota di chiusura e con il risultato. CLV positivo vuol dire che il mercato, prima dell'inizio, si è spostato verso il modello: è il segnale più affidabile di un vantaggio reale.</p>
@@ -443,6 +450,13 @@ const NI={};const nidx=t=>NI[t]||(NI[t]=Object.fromEntries(Object.keys(DATA[t].p
 function findName(t,n){const k=String(n).normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),I=nidx(t);if(I[k])return I[k];
  const p=String(n).split(" "),last=p.slice(1).join("").normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase(),f=(p[0]||"")[0];
  const c=Object.keys(DATA[t].players).filter(x=>x.normalize("NFKD").replace(/[^A-Za-z]/g,"").toLowerCase().endsWith(last)&&x[0]===f);return c.length===1?c[0]:n}
+async function renderStudio(){
+ const S={"period": "2021-2026", "source": "quote valuebetennis (solo aggregati)", "rows": [{"tour": "atp", "seg": "Tutto", "n": 27407, "acc_m": 0.647, "acc_o": 0.661, "acc_c": 0.664, "ll_m": 0.6232, "ll_o": 0.6103, "ll_c": 0.6069}, {"tour": "atp", "seg": "Slam", "n": 3022, "acc_m": 0.694, "acc_o": 0.709, "acc_c": 0.707, "ll_m": 0.5675, "ll_o": 0.5547, "ll_c": 0.5524}, {"tour": "atp", "seg": "Masters / WTA 1000", "n": 3923, "acc_m": 0.646, "acc_o": 0.652, "acc_c": 0.655, "ll_m": 0.6253, "ll_o": 0.6192, "ll_c": 0.6142}, {"tour": "atp", "seg": "ATP/WTA 250-500", "n": 7420, "acc_m": 0.651, "acc_o": 0.662, "acc_c": 0.668, "ll_m": 0.6194, "ll_o": 0.6085, "ll_c": 0.605}, {"tour": "atp", "seg": "Challenger", "n": 12796, "acc_m": 0.633, "acc_o": 0.651, "acc_c": 0.653, "ll_m": 0.6388, "ll_o": 0.6225, "ll_c": 0.6197}, {"tour": "atp", "seg": "Coppa Davis / BJK Cup", "n": 244, "acc_m": 0.652, "acc_o": 0.676, "acc_c": 0.693, "ll_m": 0.5779, "ll_o": 0.566, "ll_c": 0.55}, {"tour": "wta", "seg": "Tutto", "n": 9581, "acc_m": 0.666, "acc_o": 0.678, "acc_c": 0.678, "ll_m": 0.6061, "ll_o": 0.5937, "ll_c": 0.5893}, {"tour": "wta", "seg": "Slam", "n": 1969, "acc_m": 0.702, "acc_o": 0.719, "acc_c": 0.716, "ll_m": 0.5633, "ll_o": 0.5524, "ll_c": 0.5492}, {"tour": "wta", "seg": "Masters / WTA 1000", "n": 2772, "acc_m": 0.658, "acc_o": 0.667, "acc_c": 0.667, "ll_m": 0.6177, "ll_o": 0.6043, "ll_c": 0.6006}, {"tour": "wta", "seg": "ATP/WTA 250-500", "n": 4679, "acc_m": 0.654, "acc_o": 0.666, "acc_c": 0.668, "ll_m": 0.6199, "ll_o": 0.6069, "ll_c": 0.6016}, {"tour": "wta", "seg": "Coppa Davis / BJK Cup", "n": 161, "acc_m": 0.696, "acc_o": 0.714, "acc_c": 0.702, "ll_m": 0.5276, "ll_o": 0.5319, "ll_c": 0.5268}], "moves": "Quando il modello si discosta di oltre 5 punti dall'apertura, la quota si muove nella sua direzione nel 58% dei casi, ma non abbastanza da superare la chiusura."};
+ if(!S){$("studio").style.display="none";return}
+ const pc=v=>(v*100).toFixed(1).replace(".",",")+"%",f=v=>String(v).replace(".",",");
+ $("studiot").innerHTML=S.rows.map(r=>`<tr><td>${r.tour.toUpperCase()}</td><td>${esc(r.seg)}</td><td class="n">${r.n.toLocaleString("it-IT")}</td><td class="n">${pc(r.acc_m)}</td><td class="n">${pc(r.acc_o)}</td><td class="n">${pc(r.acc_c)}</td><td class="n">${f(r.ll_m)}</td><td class="n">${f(r.ll_c)}</td></tr>`).join("");
+ if(S.moves)$("studionote").textContent+=" "+S.moves;
+}
 async function renderClv(){
  let C=null;try{C=await (await fetch("data/clv.json",{cache:"no-store"})).json()}catch(e){}
  if(!C||!C.gruppi){$("clvt").innerHTML=`<tr><td colspan="7" class="small">L'archivio inizia a riempirsi quando sono attive le quote (chiave ODDS_API_KEY).</td></tr>`;return}
@@ -497,8 +511,9 @@ const ro=new ResizeObserver(draw);ro.observe($("court"));
 window.TP={DATA,prob,lastSpeed};
 (async()=>{await Promise.all([loadTour("atp"),loadTour("wta")]);
  try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json()}catch(e){LIVE=null}
- setTourUI();render();renderDavis();renderLive();renderClv();
+ setTourUI();render();renderDavis();renderLive();renderClv();renderStudio();
  if(Date.now()>Date.parse("2026-11-30"))$("davis").style.display="none";
  setInterval(async()=>{try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json();renderLive()}catch(e){}},5*60*1000)})();
 }
-</script></body></html>
+</script>
+<p class="small" style="text-align:center;padding:16px">Dati: TennisMyLife (uso personale) · archivio Jeff Sackmann, CC BY-NC-SA 4.0 · quote: The Odds API</p></body></html>
