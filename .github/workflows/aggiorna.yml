@@ -17,7 +17,7 @@ concurrency:
 jobs:
   aggiorna:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -52,28 +52,37 @@ jobs:
           restore-keys: dati-
 
       - name: Scarica dati TML
+        timeout-minutes: 10
         run: |
           if [ ! -f cache/2015.csv ] || [ "$(date -u +%H%M)" -lt "0415" -a "$(date -u +%H)" = "04" ]; then
-            python pipeline/download.py --mode full
+            python -u pipeline/download.py --mode full
           else
-            python pipeline/download.py --mode live
+            python -u pipeline/download.py --mode live
           fi
+          ls -la cache | head -20
 
       - name: Ricalcola i modelli se ci sono risultati nuovi
+        timeout-minutes: 15
+        continue-on-error: true
         run: |
           mkdir -p state
-          NEW=$(cat cache/*.csv cache/atp_quali/*.csv 2>/dev/null | sha1sum | cut -c1-40)
+          echo "Calcolo l'impronta dei dati..."
+          NEW=$(find cache -name '*.csv' -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -c1-40)
           OLD=$(cat state/data_hash.txt 2>/dev/null || true)
+          echo "Impronta: $NEW (prima: $OLD)"
           if [ "$NEW" != "$OLD" ] || [ ! -f docs/data/ratings_atp.json ]; then
-            python pipeline/train.py --cache cache --out docs/data && echo "$NEW" > state/data_hash.txt
+            echo "Ricalcolo i modelli..."
+            timeout --signal=INT 720 python -X faulthandler -u pipeline/train.py --cache cache --out docs/data && echo "$NEW" > state/data_hash.txt
           else
             echo "Nessun risultato nuovo: modelli invariati."
           fi
 
       - name: Quote e allarmi dal vivo
+        timeout-minutes: 5
+        continue-on-error: true
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-        run: python pipeline/live.py --cache cache --out docs/data --state state
+        run: python -u pipeline/live.py --cache cache --out docs/data --state state
 
       - name: Promemoria mensile
         if: github.event_name == 'schedule'
