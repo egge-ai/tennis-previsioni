@@ -28,11 +28,13 @@ def compact(R):
     for k, v in R["players"].items():
         o = {"e": round(v["elo"]), "n": v["n"], "s": [round(v["surface"][s]) for s in ["Hard", "Clay", "Grass"]],
              "a": int(v["active"]), "l": v["last"], "r": v["sr"], "c": v["ace"],
-             "lm": v["lm"], "tm": v["tm"], "pm": v["pm"], "pe": v["pe"]}
+             "lm": v["lm"], "tm": v["tm"], "pm": v["pm"], "pe": v["pe"],
+             "p": round(v["pts"]), "g": v["mov"], "ik": v["ik"], "td": v["td"], "ht": v["ht"], "sv": v["spw"], "rt": v["rpw"], "ar": v["acer"]}
         if v["inj"]: o["i"] = v["inj"]
         P[k] = o
     out = {k: R[k] for k in ["tour", "updated", "features", "weights", "calibration", "test"]}
     out["players"] = P
+    out["h2h"] = {k: v for k, v in R["h2h"].items() if sum(v) >= 2}; out["sec_per_point"] = R["sec_per_point"]
     out["speed"] = {k: v for k, v in R["court_speed"].items() if int(max(v)) >= dt.date.today().year - 2}
     return out
 

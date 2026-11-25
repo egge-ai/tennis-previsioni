@@ -10,9 +10,15 @@ Sito di previsioni ATP e WTA che si aggiorna da solo, ogni 15 minuti, senza un c
   2. se ci sono risultati nuovi, ricalcola i modelli ATP e WTA;
   3. legge le quote dei bookmaker (se hai inserito la chiave, vedi sotto);
   4. pubblica il sito aggiornato.
-- **Il modello** usa: Elo generale e per superficie, servizio e risposta, giorni di stop, ritiri e forfait
-  recenti, stanchezza (durata della partita precedente nel torneo; per la WTA anche le ore giocate la
-  settimana prima) e velocità del campo, che si aggiorna anche durante il torneo.
+- **Il modello** usa: Elo generale e per superficie, Elo sui game vinti (quanto è netta una vittoria),
+  punti in classifica, precedenti tra i due, servizio e risposta, giorni di stop, ritiri e forfait recenti,
+  stanchezza (durata della partita precedente nel torneo; per la WTA anche le ore giocate la settimana
+  prima) e velocità del campo, che si aggiorna anche durante il torneo.
+- **Notizie**: ogni 30 minuti cerca su Google News (inglese, italiano, spagnolo, francese) infortuni,
+  ritiri e forfait dei giocatori ancora in gara. Ogni avviso ha il link all'articolo e il pulsante
+  "Applica al modello".
+- **Proiezioni** per ogni partita: risultato in set, game totali e sopra/sotto, tie-break, ace attesi,
+  durata, punti vinti al servizio. Sono calcolate punto per punto e tarate sulla probabilità di vittoria.
 - **Problemi dell'ultimo minuto.** Nessuna fonte gratuita pubblica le notizie sugli infortuni in un
   formato leggibile da un programma. Il sito usa quindi tre segnali:
   - **quote che crollano**: se la probabilità di un giocatore scende di 10 punti o più in poche ore, compare un avviso;

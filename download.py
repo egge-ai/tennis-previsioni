@@ -40,12 +40,27 @@ def get(name, dest, tries=2):
     return False
 
 
+def code_changed(state_dir="state"):
+    """se il programma del modello è cambiato, forza il ricalcolo anche senza risultati nuovi."""
+    import hashlib
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha1(b"".join(open(os.path.join(here, f), "rb").read() for f in ("model.py", "train.py") if os.path.exists(os.path.join(here, f)))).hexdigest()
+    os.makedirs(state_dir, exist_ok=True)
+    p = os.path.join(state_dir, "code_hash.txt")
+    old = open(p).read().strip() if os.path.exists(p) else ""
+    if h != old:
+        if os.path.exists(os.path.join(state_dir, "data_hash.txt")): os.remove(os.path.join(state_dir, "data_hash.txt"))
+        open(p, "w").write(h)
+        print("Programma del modello aggiornato: ricalcolo forzato.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["full", "live"], default="live")
     ap.add_argument("--dest", default="cache")
     ap.add_argument("--first", type=int, default=2010)
     a = ap.parse_args()
+    code_changed()
     year = dt.date.today().year
     names = ["ongoing_tourneys.csv", "challenger_ongoing_tourneys.csv", "wta_ongoing_tourneys.csv"]
     years = range(a.first, year + 1) if a.mode == "full" else [year]

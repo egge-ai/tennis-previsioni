@@ -91,6 +91,82 @@ def recent_injuries(cache, days=7):
     return sorted(uniq.values(), key=lambda o: o["date"], reverse=True)
 
 
+# ------------------------------------------------------------------ notizie
+NEWS_WORDS = ('injury OR injured OR withdraws OR withdrawal OR "pulls out" OR retires OR illness OR '
+              'infortunio OR infortunato OR forfait OR ritiro OR "dà forfait" OR '
+              'lesión OR lesionado OR baja OR retirada OR blessure OR blessé OR abandon')
+STRONG = re.compile(r"withdr|pulls? out|forfait|ritir|retir(es|ed|ement from)|out of|abandon|baja|se retira|déclare forfait|won.t play", re.I)
+INJ = re.compile(r"injur|infortun|lesi[oó]n|bless|illness|sick|malat|enferm|pain|dolor|dolore|strain|tear|cramp|problem|in dubbio|doubt|fitness|duda|incertain", re.I)
+NEG = re.compile(r"return|torna|rientr|recover|guarit|back from|comeback|vuelve|retour|healthy|fit again", re.I)
+
+
+def players_to_watch(out_dir, cache, matches, limit=40):
+    """giocatori nelle partite con quote + i più forti ancora in gara nei tornei in corso."""
+    names = {m["a"] for m in matches} | {m["b"] for m in matches}
+    elo = {}
+    for t in ("atp", "wta"):
+        p = os.path.join(out_dir, f"ratings_{t}.json")
+        if os.path.exists(p):
+            elo.update({k: v["e"] for k, v in json.load(open(p, encoding="utf-8"))["players"].items()})
+    alive = set()
+    for f in ["ongoing_tourneys.csv", "challenger_ongoing_tourneys.csv", "wta_ongoing_tourneys.csv"]:
+        p = os.path.join(cache, f)
+        if not os.path.exists(p): continue
+        d = pd.read_csv(p, low_memory=False)
+        if d.empty or "winner_name" not in d: continue
+        for _, g in d.groupby("tourney_id"):
+            alive |= set(g["winner_name"]) - set(g["loser_name"])
+    alive = sorted(alive, key=lambda n: -elo.get(n, 0))[:limit]
+    return sorted(names | set(alive))
+
+
+def fetch_news(names, state, every_min=30):
+    """Google News RSS: cerca notizie su infortuni/ritiri dei giocatori, al massimo ogni 30 minuti."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+    last = parse(state["news_poll"]) if state.get("news_poll") else None
+    if os.environ.get("NEWS_MOCK"):
+        feeds = json.load(open(os.environ["NEWS_MOCK"]))
+    elif last and (NOW - last).total_seconds() / 60 < every_min - 1:
+        return state.get("news", [])
+    else:
+        feeds = []
+        for i in range(0, len(names), 6):
+            batch = names[i:i + 6]
+            q = "(" + " OR ".join(f'"{n}"' for n in batch) + ") (" + NEWS_WORDS + ") when:2d"
+            for hl, gl, ceid in (("en-US", "US", "US:en"), ("it", "IT", "IT:it")):
+                url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": hl, "gl": gl, "ceid": ceid})
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (tennis-previsioni)"})
+                    with urllib.request.urlopen(req, timeout=20) as r:
+                        feeds.append(r.read().decode("utf-8", "ignore"))
+                except Exception as e:
+                    print("  notizie non lette:", e, file=sys.stderr)
+    items = {}
+    for xml in feeds:
+        try:
+            root = ET.fromstring(xml)
+        except Exception:
+            continue
+        for it in root.iter("item"):
+            title = (it.findtext("title") or "").strip(); link = it.findtext("link") or ""
+            try: when = parsedate_to_datetime(it.findtext("pubDate"))
+            except Exception: continue
+            if (NOW - when).total_seconds() > 48 * 3600 or NEG.search(title): continue
+            strong, inj = bool(STRONG.search(title)), bool(INJ.search(title))
+            if not (strong or inj): continue
+            who = [n for n in names if norm(n.split()[-1]) in norm(title) and (len(n.split()[-1]) > 3 or norm(n) in norm(title))]
+            if not who: continue
+            src = it.findtext("source") or ""
+            for n in who[:2]:
+                items[(n, link)] = {"kind": "news", "type": "assenza" if strong else "fisico", "player": n, "url": link,
+                                    "date": when.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                                    "text": f"{n}: «{title}»" + (f" ({src})" if src else "")}
+    news = sorted(items.values(), key=lambda o: o["date"], reverse=True)[:25]
+    state["news_poll"], state["news"] = iso(NOW), news
+    return news
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default="cache"); ap.add_argument("--out", default="docs/data"); ap.add_argument("--state", default="state")
@@ -170,6 +246,11 @@ def main():
         e["best_of"] = 5 if e["tour"] == "atp" and any(x in e["title"].lower() for x in SLAMS) else 3
 
     matches = sorted([m for m in matches if parse(m["commence"]) > NOW - dt.timedelta(hours=4)], key=lambda m: m["commence"])
+    try:
+        news = fetch_news(players_to_watch(a.out, a.cache, matches), state, cfg.get("news", {}).get("every_minutes", 30))
+    except Exception as e:
+        print("  notizie: errore", e, file=sys.stderr); news = state.get("news", [])
+    alerts = [x for x in alerts if x["kind"] == "odds"] + news + [x for x in alerts if x["kind"] == "tml"]
     out = {"generated": iso(NOW), "status": status, "credits_remaining": state.get("remaining"), "matches": matches, "alerts": alerts[:40]}
     json.dump(out, open(os.path.join(a.out, "live.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     json.dump(state, open(sp, "w"), separators=(",", ":"))

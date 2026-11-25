@@ -77,9 +77,13 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
 #livet tr{cursor:pointer}#livet tr:hover td{background:color-mix(in srgb,var(--ball) 18%,transparent)}
 .diff{color:#c0392b;font-weight:600}.flag{white-space:nowrap;cursor:pointer}.flag input{width:18px;height:18px;vertical-align:-3px}
 .stack thead{}
+.pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 6px}.pgrid div{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.pgrid b{display:block;font-family:"Barlow Condensed",sans-serif;font-size:26px;line-height:1.1}.pgrid span{font-size:13px;color:var(--mute)}
+.src{font-size:14px;opacity:.9;margin-top:2px}.alert a{color:inherit;font-weight:600}.alert button{font:inherit;font-size:13px;margin-left:8px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:2px 10px;cursor:pointer}
+.alert.news{border-color:#2f6db5}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;margin:16px 0}.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.stat .big{font-size:36px}
 .small{font-size:13px;color:var(--mute)}
 @media(max-width:700px){.grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){#live th:nth-child(5),#livet td:nth-child(5){display:none}#livet td{font-size:14px}}
 @media(max-width:600px){.rub .rp{grid-template-columns:minmax(0,1fr)}.rub .rp .pp{text-align:left}.rub .rp span:last-child{text-align:left!important}}
 @media(max-width:600px){.controls{grid-template-columns:minmax(0,1fr)}table{font-size:14px}}
 @media(prefers-reduced-motion:no-preference){.netmove{transition:transform .5s ease}}
@@ -101,6 +105,7 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
 </div>
 <datalist id="names"></datalist>
 <div class="score"><div><div class="nm" id="na"></div><div class="pc" id="ca"></div></div><div style="text-align:right"><div class="nm" id="nb"></div><div class="pc" id="cb"></div></div></div>
+<div class="src" id="srcline" style="background:var(--court2);color:#fff;padding:0 18px 8px"></div>
 <div class="fig" id="fig"><svg id="court" role="img" aria-label="Probabilità di vittoria"></svg></div>
 <p class="warn" id="warn"></p>
 </div></section>
@@ -115,8 +120,8 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
 
 <section class="band" style="padding-top:0"><div class="wrap grid">
  <div class="card" id="sure"></div>
- <div class="card"><h2>Risultato in set</h2><div id="sets"></div>
-  <p class="small">Probabilità di ogni punteggio finale, calcolata dalla probabilità di vincere ciascun set.</p></div>
+ <div class="card"><h2>Proiezioni</h2><div id="sets"></div><div class="pgrid" id="proj"></div>
+  <p class="small" id="projnote">Calcolate punto per punto da servizio e risposta dei due, tarate sulla probabilità di vittoria.</p></div>
 </div></section>
 
 <section class="band" style="padding-top:0"><div class="wrap card">
@@ -178,6 +183,8 @@ function pl(R,n){return R.players[n]||{e:1500,n:0,s:[1500,1500,1500],a:0,l:null,
 const days=d=>d?Math.max(0,Math.round((Date.now()-Date.parse(d))/864e5)):null;
 let FLAGS={};try{FLAGS=JSON.parse(localStorage.getItem("flags")||"{}")}catch(e){}
 const injN=(P,name)=>(P.i||[]).filter(d=>days(d)<=90).length+(name&&FLAGS[name]?1:0);
+const injD=(P,name)=>(P.ik||[]).reduce((s,[d,w])=>{const k=days(d);return k!=null&&k<=120?s+w*Math.exp(-k/30):s},0)+(name&&FLAGS[name]?1:0);
+const hang=P=>P.td&&days(P.td)<=9&&P.l===P.td?1:0;
 function fat(P){                               // ore: partita precedente nel torneo, torneo della settimana prima
  const d=days(P.l);if(d==null)return[0,0];
  if(d<=3)return[(P.lm||0)/60,P.pe&&days(P.pe)<=12?(P.pm||0)/60:0];
@@ -186,22 +193,64 @@ function fat(P){                               // ore: partita precedente nel to
 function prob(tour,a,b,surface,bestOf,speed){
  if(speed===undefined)speed=st.speed||0;
  const R=DATA[tour],A=pl(R,a),B=pl(R,b),bo5=bestOf==5?1:0,i=SI[surface];
- const dO=(A.e-B.e)/100,dS=(A.s[i]-B.s[i])/100,ex=Math.min(Math.log1p(A.n),Math.log1p(B.n))/Math.log1p(200);
+ const H=h2h(R,a,b),dO=(A.e-B.e)/100,dS=(A.s[i]-B.s[i])/100,ex=Math.min(Math.log1p(A.n),Math.log1p(B.n))/Math.log1p(200);
  const now=Date.now(),lay=P=>Math.log1p(Math.min(P.l?Math.max(0,(now-Date.parse(P.l))/864e5):400,400));
  const x={d_overall:dO,d_surface:dS,d_overall_bo5:dO*bo5,d_surface_bo5:dS*bo5,d_overall_exp:dO*ex,
+  d_mov:((A.g||1500)-(B.g||1500))/100,d_h2h:(H[0]-H[1])/(H[0]+H[1]+2),d_rank:Math.log1p(A.p||0)-Math.log1p(B.p||0),
+  d_injd:injD(A,a)-injD(B,b),d_hang:hang(A)-hang(B),d_ht:A.ht&&B.ht?(A.ht-B.ht)/10:0,
   d_sr:(A.r-B.r)/5,d_layoff:lay(A)-lay(B),d_inj:injN(A,a)-injN(B,b),d_pmin:fat(A)[0]-fat(B)[0],d_wk:fat(A)[1]-fat(B)[1],d_tmin:0,d_ace_speed:((A.c||0)-(B.c||0))/3*speed/2,d_form:0,d_mins3:0,d_n10:0,d_overall_layoff:dO*Math.max(lay(A),lay(B))/Math.log1p(400)};
  return 1/(1+Math.exp(-R.features.reduce((s,f,k)=>s+R.weights[k]*(x[f]||0),0)));
 }
+function h2h(R,a,b){const k=R.h2h&&R.h2h[a+"|"+b];if(k)return k;const r=R.h2h&&R.h2h[b+"|"+a];return r?[r[1],r[0]]:[0,0]}
 const fromSet=(s,bo)=>bo==5?s**3*(1+3*(1-s)+6*(1-s)**2):s**2*(1+2*(1-s));
 function sets(pm,bo){let lo=0,hi=1;for(let i=0;i<50;i++){const m=(lo+hi)/2;fromSet(m,bo)<pm?lo=m:hi=m}
  const s=(lo+hi)/2,q=1-s,need=bo==5?3:2,C=(n,k)=>k==0||k==n?1:C(n-1,k-1)+C(n-1,k),o=[];
  for(let l=0;l<need;l++){const w=C(need-1+l,l);o.push([`${need}-${l}`,w*s**need*q**l],[`${l}-${need}`,w*q**need*s**l])}
  return o}
+const MK={};
+function gameP(p){const q=1-p;return p**4*(1+4*q+10*q*q)+20*p**3*q**3*p*p/(1-2*p*q)}
+function gamePts(p){ // punti attesi in un game
+ const q=1-p,m=new Map();const f=(a,b)=>{if(a>=4&&a-b>=2||b>=4&&b-a>=2)return 0;if(a>=3&&b>=3&&a===b)return 2/(p*p+q*q);
+  const k=a*10+b;if(m.has(k))return m.get(k);const v=1+p*f(a+1,b)+q*f(a,b+1);m.set(k,v);return v};return f(0,0)}
+function tbP(pa,pb){const m=new Map();const f=(a,b)=>{if(a>=7&&a-b>=2)return 1;if(b>=7&&b-a>=2)return 0;
+  if(a===b&&a>=6){const x=pa*(1-pb),y=(1-pa)*pb;return x/(x+y)}
+  const k=a*100+b;if(m.has(k))return m.get(k);const n=a+b,sa=n%4===0||n%4===3,p=sa?pa:1-pb,v=p*f(a+1,b)+(1-p)*f(a,b+1);m.set(k,v);return v};return f(0,0)}
+// distribuzione dei punteggi di un set: A al servizio per primo se aFirst
+function setDist(pa,pb,aFirst){
+ const ga=gameP(pa),gb=1-gameP(pb),tb=tbP(aFirst?pa:1-pb,aFirst?pb:1-pa),out={};let cur={"0-0":1};
+ for(let n=0;n<13;n++){const nx={};for(const k in cur){const[a,b]=k.split("-").map(Number),pr=cur[k];
+   if(a===6&&b===6){const wa=aFirst?tb:1-tbP(pb,pa);out["7-6"]=(out["7-6"]||0)+pr*wa;out["6-7"]=(out["6-7"]||0)+pr*(1-wa);continue}
+   const serveA=((a+b)%2===0)===aFirst,p=serveA?ga:gb;
+   for(const[na,nb,pp] of [[a+1,b,p],[a,b+1,1-p]]){const fin=(na>=6&&na-nb>=2)||(nb>=6&&nb-na>=2)||na===7||nb===7,kk=na+"-"+nb;
+    if(fin)out[kk]=(out[kk]||0)+pr*pp;else nx[kk]=(nx[kk]||0)+pr*pp}}cur=nx}
+ return out}
+function matchProj(pa,pb,bo){
+ const need=bo==5?3:2;let cur=[{a:0,b:0,g:0,first:1,pr:1,tb:0}],fin=[];
+ const D={1:setDist(pa,pb,true),0:setDist(pa,pb,false)};
+ while(cur.length){const nx=[];for(const s of cur){const d=D[s.first];for(const k in d){const[x,y]=k.split("-").map(Number),pr=s.pr*d[k],g=x+y;
+   const n={a:s.a+(x>y),b:s.b+(y>x),g:s.g+g,first:(g%2===0)?s.first:1-s.first,pr,tb:s.tb||(x+y===13)};
+   if(n.a===need||n.b===need)fin.push(n);else nx.push(n)}}
+  const mp=new Map();for(const n of nx){const k=[n.a,n.b,n.g,n.first,n.tb].join();const o=mp.get(k);if(o)o.pr+=n.pr;else mp.set(k,{...n})}cur=[...mp.values()]}
+ const win=fin.filter(f=>f.a>f.b).reduce((s,f)=>s+f.pr,0),eg=fin.reduce((s,f)=>s+f.pr*f.g,0),ptb=fin.filter(f=>f.tb).reduce((s,f)=>s+f.pr,0);
+ const sc={};for(const f of fin){const k=f.a+"-"+f.b;sc[k]=(sc[k]||0)+f.pr}
+ const over=L=>fin.filter(f=>f.g>L).reduce((s,f)=>s+f.pr,0);
+ return{win,eg,ptb,sc,over,fin}}
+function projections(tour,a,b,surface,bo,pFinal){
+ const R=DATA[tour],A=pl(R,a),B=pl(R,b);
+ if(!R._mr){const act=Object.values(R.players).filter(p=>p.a&&p.rt);R._mr=act.reduce((s,p)=>s+p.rt,0)/act.length;R._ms=act.reduce((s,p)=>s+p.sv,0)/act.length}
+ const sa=A.sv||R._ms,ra=A.rt||R._mr,sb=B.sv||R._ms,rb=B.rt||R._mr;
+ let pa0=sa-(rb-R._mr),pb0=sb-(ra-R._mr);
+ let lo=-.25,hi=.25;for(let i=0;i<30;i++){const d=(lo+hi)/2,w=matchProj(Math.min(.95,Math.max(.3,pa0+d)),Math.min(.95,Math.max(.3,pb0-d)),bo).win;if(w<pFinal)lo=d;else hi=d}
+ const d=(lo+hi)/2,pa=Math.min(.95,Math.max(.3,pa0+d)),pb=Math.min(.95,Math.max(.3,pb0-d)),M=matchProj(pa,pb,bo);
+ const spA=gamePts(pa),spB=gamePts(pb);
+ const svcGamesEach=M.eg/2;
+ return{...M,pa,pb,aceA:svcGamesEach*spA*(A.ar||.07),aceB:svcGamesEach*spB*(B.ar||.07),
+  mins:(svcGamesEach*(spA+spB)+M.ptb*6)*(R.sec_per_point||40)/60}}
 function level(cal,c){const i=cal.findIndex(k=>c>=k.lo&&c<k.hi);return i<0?cal.length-1:i}
 
 function draw(){
  const svg=$("court"),W=svg.clientWidth,H=svg.clientHeight;if(!DATA[st.tour]||!W)return;
- const [c1,c2]=SURF[st.surface],p=prob(st.tour,st.a,st.b,st.surface,st.bestOf),small=W<520;
+ const [c1,c2]=SURF[st.surface],p=st._p!=null?st._p:prob(st.tour,st.a,st.b,st.surface,st.bestOf),small=W<520;
  const m=Math.max(14,W*.06),cw=W-2*m,ch=H-2*m*.8,x0=m,y0=m*.8,netX=x0+cw*p;
  const fs=Math.min(small?60:96,H*.35);
  const line=(x1,y1,x2,y2,w=2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#fff" stroke-width="${w}" opacity=".9"/>`;
@@ -249,16 +298,18 @@ function setTourUI(){
  $("stats").innerHTML=card(pc1(main.acc),`vincitori indovinati nel 2026, ${w?"WTA":"circuito ATP maggiore"} (${main.n.toLocaleString("it-IT")} partite)`)
   +(w?card(pc1(old.acc),"il modello precedente, sulle stesse partite"):card(pc1(nw.acc),`su tutte le ${nw.n.toLocaleString("it-IT")} partite ATP 2026, Challenger e qualificazioni compresi`))
   +(bk?card(`${pc1(bm.acc)} / ${pc1(bk.acc)}`,`modello / bookmaker, sulle ${bk.n.toLocaleString("it-IT")} partite 2026 con quote di chiusura`):"");
- $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, ritiri e forfait recenti, stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Fattori mentali (tie-break, set decisivi, palle break), gioco in casa, indoor, altitudine e meteo (temperatura e vento, su oltre 20.000 giornate di torneo) sono stati provati su 2025 e 2026 ma non migliorano le previsioni, quindi non sono usati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
+ $("method").textContent=`Elo generale e per superficie, punti vinti al servizio e in risposta, giorni dall'ultima partita, punti in classifica, Elo sui game vinti, precedenti tra i due (ATP), ritiri e forfait recenti pesati per gravità e tempo trascorso, titolo vinto la settimana prima (ATP), altezza (WTA), stanchezza (durata della partita precedente, torneo della settimana prima), velocità del campo; una regressione logistica li combina. Fattori mentali (tie-break, set decisivi, palle break), gioco in casa, indoor, altitudine, meteo, mancini, fusi orari, cambio di superficie, carico di lavoro e incertezza del punteggio sono stati provati su 2025 e 2026 ma non migliorano le previsioni, quindi non sono usati. Dati Tennismylife (TML) aggiornati al ${fmtDate(R.updated)}. ${bk?"I bookmaker restano un po' più precisi perché conoscono infortuni e notizie dell'ultimo momento. ":""}Nessuna previsione è una certezza: anche sopra il 90% ${w?"la favorita":"il favorito"} a volte perde. Dati TennisMyLife per uso personale e non commerciale.`;
  for(const b of $("tour").children)b.setAttribute("aria-pressed",String(b.dataset.v===st.tour));
 }
 
 function render(){
  const R=DATA[st.tour];if(!R)return;
- const p=prob(st.tour,st.a,st.b,st.surface,st.bestOf),fav=p>=.5?st.a:st.b,c=Math.max(p,1-p),li=level(R.calibration,c),k=R.calibration[li],[lab,col]=LEVELS[li];
+ const pModel=prob(st.tour,st.a,st.b,st.surface,st.bestOf),mk=st.market&&st.market.a===st.a&&st.market.b===st.b?st.market.p:st.market&&st.market.a===st.b&&st.market.b===st.a?1-st.market.p:null;
+ const p=mk!=null?mk:pModel,pF=p,fav=p>=.5?st.a:st.b,c=Math.max(p,1-p),li=level(R.calibration,c),k=R.calibration[li],[lab,col]=LEVELS[li];
  document.documentElement.style.setProperty("--court",SURF[st.surface][0]);
  document.documentElement.style.setProperty("--court2",SURF[st.surface][1]);
  $("na").textContent=st.a;$("nb").textContent=st.b;$("ca").textContent=pct(p);$("cb").textContent=pct(1-p);
+ $("srcline").textContent=mk!=null?`Fonte: quote dei bookmaker · il modello dice ${pct(pModel)} – ${pct(1-pModel)}`:"Fonte: modello (nessuna quota per questa sfida)";
  const miss=[st.a,st.b].filter(n=>!R.players[n]),w=st.tour==="wta";
  $("warn").textContent=st.a===st.b?(w?"Scegli due giocatrici diverse.":"Scegli due giocatori diversi."):miss.length?`Non trovo ${miss.join(" e ")} nei dati ${w?"WTA":"ATP"}: lo considero un punteggio medio (Elo 1500), la previsione è poco affidabile.`:[st.a,st.b].some(n=>!R.players[n].a)?"Uno dei due non gioca da più di un anno: il punteggio potrebbe non essere aggiornato.":"";
  $("sure").innerHTML=`<h2>Quanto è sicura</h2>
@@ -266,10 +317,16 @@ function render(){
  <div class="meter" style="--c:${col}">${LEVELS.map((_,i)=>`<i class="${i<=li?"on":""}"></i>`).join("")}</div>
  <p style="margin:0">Favorit${w?"a":"o"}: <b>${esc(fav)}</b> al ${pct(c)}.</p>
  <p style="margin:8px 0 0">Nel test 2026, quando il modello era sicuro tra il ${Math.round(k.lo*100)}% e il ${Math.round(k.hi*100)}%, ${w?"la favorita":"il favorito"} ha vinto <b>${Math.round(k.hit*100)} volte su 100</b> (${k.n.toLocaleString("it-IT")} partite).</p>`;
- $("sets").innerHTML=sets(p,st.bestOf).sort((x,y)=>y[1]-x[1]).map(([s,q])=>{const[a,b]=s.split("-").map(Number),wn=a>b?st.a:st.b,sc=a>b?s:`${b}-${a}`;
+ const P=projections(st.tour,st.a,st.b,st.surface,st.bestOf,pF);
+ $("sets").innerHTML=Object.entries(P.sc).sort((x,y)=>y[1]-x[1]).map(([s,q])=>{const[a,b]=s.split("-").map(Number),wn=a>b?st.a:st.b,sc=a>b?s:`${b}-${a}`;
   return `<div class="row"><span><b>${sc}</b></span><div class="bar"><b style="width:${(q*100).toFixed(1)}%;${a>b?"":"opacity:.55"}"></b></div><span>${pct(q)}</span></div><div class="small" style="margin:-6px 0 6px">${esc(wn)}</div>`}).join("");
+ const L1=st.bestOf==5?37.5:21.5,L2=st.bestOf==5?39.5:23.5,f1=v=>v.toFixed(1).replace(".",",");
+ const hm=m=>`${Math.floor(m/60)}h ${String(Math.round(m%60)).padStart(2,"0")}′`;
+ $("proj").innerHTML=[[f1(P.eg),"game totali attesi"],[pct(P.over(L1)),`più di ${f1(L1)} game`],[pct(P.over(L2)),`più di ${f1(L2)} game`],[pct(P.ptb),"almeno un tie-break"],
+  [`${f1(P.aceA)} – ${f1(P.aceB)}`,"ace attesi"],[hm(P.mins),"durata prevista"],[pct(P.pa),`punti vinti al servizio da ${esc(st.a.split(" ").pop())}`],[pct(P.pb),`punti vinti al servizio da ${esc(st.b.split(" ").pop())}`]]
+  .map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join("");
  for(const g of ["surf","bo"])for(const b of $(g).children)b.setAttribute("aria-pressed",String(b.dataset.v==(g=="surf"?st.surface:st.bestOf)));
- draw();renderCond();renderSlip();
+ st._p=p;draw();renderCond();renderSlip();
 }
 function renderCond(){
  const R=DATA[st.tour],A=pl(R,st.a),B=pl(R,st.b),i=SI[st.surface],w=st.tour==="wta";
@@ -367,8 +424,8 @@ function renderLive(){
  if(!LIVE){$("livesub").textContent="Dati dal vivo non disponibili.";return}
  const g=new Date(LIVE.generated);
  $("livesub").textContent=`Aggiornato alle ${g.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})} del ${g.toLocaleDateString("it-IT")} · ${LIVE.status}`+(LIVE.credits_remaining!=null?` · crediti quote rimasti: ${Math.round(LIVE.credits_remaining)}`:"");
- const al=(LIVE.alerts||[]).slice(0,6);
- $("alerts").innerHTML=al.map(a=>`<div class="alert ${a.kind==="tml"?"tml":""}"><time>${esc(a.date)}</time>${esc(a.text)}</div>`).join("");
+ const al=(LIVE.alerts||[]).slice(0,10);
+ $("alerts").innerHTML=al.map(a=>`<div class="alert ${a.kind}"><time>${esc(a.date)}</time>${esc(a.text)}${a.url&&/^https?:/.test(a.url)?` <a href="${esc(a.url)}" target="_blank" rel="noopener">leggi</a>`:""}${a.player&&!FLAGS[a.player]&&a.kind!=="tml"?`<button type="button" data-apply="${esc(a.player)}">Applica al modello</button>`:a.player&&FLAGS[a.player]?" · <i>applicato</i>":""}</div>`).join("");
  const flagged=new Set(al.filter(a=>a.player).map(a=>a.player));
  const rows=(LIVE.matches||[]).filter(m=>DATA[m.tour]).map(m=>{
   const A=findName(m.tour,m.a),B=findName(m.tour,m.b),sp=m.tourney&&DATA[m.tour].speed[m.tourney]?lastSpeed(DATA[m.tour].speed[m.tourney]):0;
@@ -376,11 +433,12 @@ function renderLive(){
   const t=new Date(m.commence),when=t.toLocaleDateString("it-IT",{weekday:"short",day:"numeric"})+" "+t.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
   const warn=[A,B,m.a,m.b].some(x=>flagged.has(x)||FLAGS[x])?" ⚠":"";
   const big=pk!=null&&Math.abs(pk-pm)>=.15;
-  return`<tr data-m="${esc(JSON.stringify({tour:m.tour,a:A,b:B,surface:m.surface,bo:m.best_of,court:m.tourney||""}))}"><td>${when}</td><td><b>${esc(A)}</b> – ${esc(B)}${warn}<div class="small">${esc(m.title)}</div></td><td class="n">${pct(pm)}</td><td class="n${big?" diff":""}">${pk!=null?pct(pk):"—"}</td><td class="n"><b>${esc(fin>=.5?A:B)}</b> ${pct(Math.max(fin,1-fin))}</td></tr>`});
+  return`<tr data-m="${esc(JSON.stringify({tour:m.tour,a:A,b:B,surface:m.surface,bo:m.best_of,court:m.tourney||"",pk:pk}))}"><td>${when}</td><td><b>${esc(A)}</b> – ${esc(B)}${warn}<div class="small">${esc(m.title)}</div></td><td class="n">${pct(pm)}</td><td class="n${big?" diff":""}">${pk!=null?pct(pk):"—"}</td><td class="n"><b>${esc(fin>=.5?A:B)}</b> ${pct(Math.max(fin,1-fin))}</td></tr>`});
  $("livet").innerHTML=rows.join("")||`<tr><td colspan="5" class="small">Nessuna partita con quote nelle prossime ore${LIVE.status.startsWith("nessuna")?": per attivarle aggiungi la chiave ODDS_API_KEY (vedi README)":""}.</td></tr>`;
 }
+$("alerts").addEventListener("click",e=>{const n=e.target.dataset.apply;if(!n)return;FLAGS[n]=Date.now();try{localStorage.setItem("flags",JSON.stringify(FLAGS))}catch(x){}render();renderLive()});
 $("livet").addEventListener("click",async e=>{const tr=e.target.closest("tr[data-m]");if(!tr)return;const m=JSON.parse(tr.dataset.m);
- if(m.tour!==st.tour)await switchTour(m.tour);st.a=m.a;st.b=m.b;st.surface=m.surface||"Hard";st.bestOf=m.bo||3;st.court=DATA[m.tour].speed[m.court]?m.court:"";
+ if(m.tour!==st.tour)await switchTour(m.tour);st.a=m.a;st.b=m.b;st.surface=m.surface||"Hard";st.bestOf=m.bo||3;st.court=DATA[m.tour].speed[m.court]?m.court:"";st.market=m.pk!=null?{a:m.a,b:m.b,p:m.pk}:null;
  $("pa").value=st.a;$("pb").value=st.b;setTourUI();render();document.getElementById("fig").scrollIntoView({behavior:"smooth",block:"center"})});
 
 async function loadTour(t){
@@ -394,7 +452,7 @@ async function switchTour(t){
  try{localStorage.setItem("tour",t)}catch(e){}
  setTourUI();render();
 }
-function setPlayer(k,v){const R=DATA[st.tour];v=v.trim();const hit=Object.keys(R.players).find(n=>n.toLowerCase()===v.toLowerCase());st[k]=hit||v;render()}
+function setPlayer(k,v){st.market=null;const R=DATA[st.tour];v=v.trim();const hit=Object.keys(R.players).find(n=>n.toLowerCase()===v.toLowerCase());st[k]=hit||v;render()}
 $("tour").addEventListener("click",e=>{const v=e.target.closest("button")?.dataset.v;if(v)switchTour(v)});
 $("pa").addEventListener("change",e=>setPlayer("a",e.target.value));
 $("pb").addEventListener("change",e=>setPlayer("b",e.target.value));

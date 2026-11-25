@@ -1,7 +1,10 @@
 {
   "odds": {
     "regions": "eu",
-    "prefixes": ["tennis_atp", "tennis_wta"],
+    "prefixes": [
+      "tennis_atp",
+      "tennis_wta"
+    ],
     "min_interval_minutes": 15,
     "reserve_credits": 20
   },
@@ -9,5 +12,8 @@
     "drop_points": 10,
     "window_hours": 6,
     "vanish_hours": 3
+  },
+  "news": {
+    "every_minutes": 30
   }
 }
