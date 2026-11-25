@@ -19,9 +19,6 @@ jobs:
   aggiorna:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +29,6 @@ jobs:
           [ -f index.html ] && mv index.html docs/
           [ -f .nojekyll ] && mv .nojekyll docs/
           for f in ratings_atp.json ratings_wta.json live.json meta.json; do [ -f "$f" ] && mv "$f" docs/data/; done
-          ls pipeline docs docs/data
           if [ ! -f pipeline/download.py ] || [ ! -f docs/index.html ]; then echo "::error::Mancano dei file del progetto"; exit 1; fi
 
       - uses: actions/setup-python@v5
@@ -94,5 +90,13 @@ jobs:
         with:
           path: docs
 
+  pubblica:
+    needs: aggiorna
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
         uses: actions/deploy-pages@v5
