@@ -76,6 +76,8 @@ Da lì in poi si aggiorna da solo.
 - **File `wta_itf.csv.gz`.** Contiene le partite ITF e di qualificazione WTA 2010–giugno 2026 dall'archivio
   di Jeff Sackmann (licenza CC BY-NC-SA 4.0: uso non commerciale, citando la fonte). Va caricato nella cartella
   principale del repository: migliora le valutazioni delle giocatrici meno note. Se manca, il modello funziona lo stesso.
+- **Stile di gioco.** I profili vengono dal Match Charting Project di Jeff Sackmann (CC BY-NC-SA 4.0) e sono
+  già dentro la pagina: non serve caricare altri file. Sono solo descrittivi e non cambiano le probabilità.
 - **Prova contro i bookmaker.** La pagina contiene solo i risultati aggregati della prova 2021–2026 su circa
   37.000 partite, non le quote.
 - **Disattivazione automatica.** GitHub sospende i lavori programmati dei repository fermi da 60 giorni. Il
