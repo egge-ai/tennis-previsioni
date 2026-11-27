@@ -54,6 +54,7 @@ tr.hl td{background:color-mix(in srgb,var(--ball) 28%,transparent)}
 .total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:12px}
 .tag{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-right:4px;vertical-align:1px}
 td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
+.seg button[disabled]{opacity:.35;cursor:not-allowed}.tinfo{flex-basis:100%;line-height:1.45}.tinfo b{color:var(--ink)}
 .court-l{display:flex;align-items:center;gap:8px}.court-l select,.dv select,.dv input{font:inherit;font-size:16px;min-height:44px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:0 10px;max-width:100%}
 .spd td.n{font-variant-numeric:tabular-nums}.spd td.h{border-radius:6px}
 .dvlink{display:inline-block;margin:8px 0 0;font-weight:600;color:var(--ink);text-decoration:none;border-bottom:2px solid #d4ef3a}
@@ -97,10 +98,11 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
  <div><label for="pa" id="la">Giocatore 1</label><input id="pa" list="names" autocomplete="off"></div>
  <div><label for="pb" id="lb">Giocatore 2</label><input id="pb" list="names" autocomplete="off"></div>
  <div class="opts">
+  <label class="court-l"><span class="small">Torneo</span><select id="court-sel"></select></label>
   <div class="seg" id="surf" role="group" aria-label="Superficie"><button data-v="Hard">Cemento</button><button data-v="Clay">Terra</button><button data-v="Grass">Erba</button></div>
   <div class="seg" id="bo" role="group" aria-label="Formato"><button data-v="3">Al meglio dei 3</button><button data-v="5">dei 5</button></div>
   <button class="btn ghost" id="swap" type="button">⇄ Inverti</button>
-  <label class="court-l"><span class="small">Campo</span><select id="court-sel"></select></label>
+  <div class="tinfo small" id="tinfo"></div>
  </div>
 </div>
 <datalist id="names"></datalist>
@@ -131,6 +133,7 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
  <p class="small" style="margin-top:-6px">Gli elementi che il modello usa oltre al punteggio Elo. Il verde indica chi è avvantaggiato. Gli ace contano solo se scegli un campo veloce o lento. Se sai di un problema fisico prima che arrivi nei dati, segnalalo: il modello lo tratta come un ritiro recente.</p>
  <div class="scroll"><table class="cond"><thead><tr><th></th><th class="n" id="cha"></th><th class="n" id="chb"></th></tr></thead><tbody id="cond"></tbody></table></div>
  <p class="small" id="condnote"></p>
+ <div id="pnews"></div>
 </div></section>
 
 <section class="band" style="padding-top:0"><div class="wrap card">
@@ -169,6 +172,17 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
  <h2>Velocità dei campi nel tempo</h2>
  <p class="sub" style="margin-top:0">Quanti ace in più (+) o in meno (−) del solito fanno i giocatori in ogni torneo, in punti percentuali. Più è alto, più il campo è veloce. Durante un torneo il valore si aggiorna partita dopo partita.</p>
  <div class="card scroll"><table class="spd"><thead id="spdh"></thead><tbody id="spdb"></tbody></table></div>
+ <h3 style="margin:22px 0 6px">Le palle</h3>
+ <div class="card scroll"><table><thead><tr><th>Torneo</th><th>Palla ufficiale</th></tr></thead><tbody>
+  <tr><td>Australian Open (e tornei australiani di gennaio)</td><td>Dunlop AO</td></tr>
+  <tr><td>Roland Garros</td><td>Wilson Roland-Garros Clay (dal 2020)</td></tr>
+  <tr><td>Wimbledon</td><td>Slazenger Wimbledon (dal 1902)</td></tr>
+  <tr><td>US Open</td><td>Wilson US Open Extra Duty</td></tr>
+  <tr><td>Indian Wells, Miami</td><td>Dunlop dal 2026 (a Indian Wells prima Penn)</td></tr>
+  <tr><td>Monte Carlo, Madrid, Roma</td><td>Dunlop Fort Clay <i>(da confermare per il 2026)</i></td></tr>
+  <tr><td>ATP Finals</td><td>Dunlop ATP</td></tr>
+ </tbody></table></div>
+ <p class="small">Le palle per cemento sono "extra duty": il feltro è più spesso, si gonfia con l'usura e la palla rallenta nel corso dei game, finché viene cambiata. Quelle per terra e indoor sono "regular duty", con feltro più sottile. In altura (Madrid, Bogotà, Quito) la palla vola più veloce. Nessuno pubblica misure di laboratorio palla per palla, quindi il modello non usa la marca: usa la velocità misurata sopra, che contiene già insieme palla, superficie, altura e clima. Esempio: nel 2026 Indian Wells è passata a Dunlop e ha anche ritarato la superficie Laykold, e la velocità misurata è salita da −2,6 a −0,2 (ATP) e da −1,4 a +0,1 (WTA). Le due cause non si possono separare.</p>
 </div></section>
 
 <section class="band" style="padding-top:0"><div class="wrap">
@@ -184,7 +198,7 @@ td.good{color:#1f8a4c;font-weight:600}td.bad{color:#c0392b;font-weight:600}
 const SURF={Hard:["#2f6db5","#24568f","Cemento"],Clay:["#c8623a","#9e4a2a","Terra"],Grass:["#4f8f3a","#3b6f2b","Erba"]};
 const SI={Hard:0,Clay:1,Grass:2};
 const LEVELS=[["Rischiosa","#c0392b"],["Incerta","#d9822b"],["Buona","#c9b100"],["Solida","#5aa02c"],["Quasi sicura","#1f8a4c"]];
-const DEF={atp:["Jannik Sinner","Carlos Alcaraz",5],wta:["Aryna Sabalenka","Elena Rybakina",3]};
+const DEF={atp:["Jannik Sinner","Carlos Alcaraz",3],wta:["Aryna Sabalenka","Elena Rybakina",3]};
 const DATA={};
 const st={court:"",speed:0,tour:"atp",a:DEF.atp[0],b:DEF.atp[1],surface:"Hard",bestOf:5};
 let slip=[];try{slip=JSON.parse(localStorage.getItem("slip2")||"[]")}catch(e){}
@@ -312,15 +326,38 @@ function renderSpeedTable(){
  $("spdh").innerHTML=`<tr><th>Torneo</th>${ys.map(y=>`<th class="n">${y}</th>`).join("")}</tr>`;
  $("spdb").innerHTML=pick.map(n=>{const h=R.speed[n];return`<tr><td>${esc(n.replace(" Masters",""))}</td>${ys.map(y=>{const v=h[y];return`<td class="n h" style="background:${col(v)}">${v==null?"—":(v>0?"+":"")+v.toFixed(1).replace(".",",")}</td>`}).join("")}</tr>`}).join("");
 }
+// palle ufficiali 2026: [espressione sul nome del torneo, palla, tipo, 1 = confermata da fonte 2025-26]
+const BALLS=[
+ [/^Australian Open|^Brisbane|^Adelaide|^United Cup/,"Dunlop AO","cemento",1],
+ [/^Roland Garros/,"Wilson Roland-Garros Clay","terra",1],
+ [/^Wimbledon/,"Slazenger Wimbledon","erba",1],
+ [/^US Open/,"Wilson US Open Extra Duty","cemento",1],
+ [/^Indian Wells|^Miami/,"Dunlop (dal 2026; prima Penn)","cemento",1],
+ [/^Monte Carlo|^Madrid|^Rome/,"Dunlop Fort Clay","terra",0],
+ [/^ATP Finals|^Next ?Gen/,"Dunlop ATP","cemento indoor",1],
+ [/^Barcelona|^Basel|^Vienna|^Hamburg|^Tokyo|^Antwerp|^Atlanta|^Belgrade|^Chengdu|^Cordoba|^Dallas|^Estoril|^Houston|^Munich/,"Dunlop ATP","",0]];
+function ballFor(n){for(const [re,b,t,ok] of BALLS)if(re.test(n))return[b,t,ok];return null}
+const SURF_IT={Hard:"cemento",Clay:"terra",Grass:"erba",Carpet:"sintetico"};
+function applyCourt(){
+ const R=DATA[st.tour],w=st.tour==="wta",ci=st.court&&R.court?R.court[st.court]:null;
+ if(ci){st.surface=ci.s==="Carpet"?"Hard":ci.s;st.bestOf=w?3:ci.bo}else if(w)st.bestOf=3;
+ for(const b of $("surf").children)b.disabled=!!ci&&b.dataset.v!==st.surface;
+ for(const b of $("bo").children)b.disabled=!!ci&&+b.dataset.v!==st.bestOf;
+ const bl=ci?ballFor(st.court):null,sp=st.court&&R.speed[st.court]?lastSpeed(R.speed[st.court]):null;
+ $("tinfo").innerHTML=ci?`<b>${esc(st.court)}</b>: ${SURF_IT[ci.s]}${ci.i?" al coperto":" all'aperto"} · al meglio dei ${st.bestOf} set · campo ${speedWord(sp)} (${sp>0?"+":""}${sp.toFixed(1).replace(".",",")} rispetto alla media della superficie) · palla `+(bl?`<b>${esc(bl[0])}</b>${bl[2]?"":" <i>(dall'elenco del produttore, da confermare)</i>"}`:"non verificata")+`. Superficie e formato sono decisi dal torneo.`
+  :`Partita generica: scegli tu superficie${w?"":" e formato (al meglio dei 5 si gioca solo nei 4 Slam maschili)"}.`;
+}
 function setTourUI(){
  const R=DATA[st.tour],w=st.tour==="wta";
- const sp=Object.entries(R.speed).sort((a,b)=>a[0].localeCompare(b[0]));
- $("court-sel").innerHTML=`<option value="">Velocità media</option>`+sp.map(([n,h])=>{const v=lastSpeed(h);return`<option value="${esc(n)}">${esc(n)} · ${speedWord(v)} (${v>0?"+":""}${v.toFixed(1).replace(".",",")})</option>`}).join("");
+ const C=R.court||{},sp=Object.entries(R.speed).filter(([n])=>C[n]).sort((a,b)=>a[0].localeCompare(b[0]));
+ const grp=n=>{const l=C[n].lv;return l==="G"?0:l==="F"?1:(l==="M"||l==="1000"||l==="PM")?2:l==="500"?3:l==="C"?5:4};
+ const GN=["Slam","Finals","Masters 1000","500","250 e altri","Challenger"];
+ $("court-sel").innerHTML=`<option value="">Partita generica (scegli tu)</option>`+GN.map((g,i)=>{const L=sp.filter(([n])=>grp(n)===i);return L.length?`<optgroup label="${g}">`+L.map(([n,h])=>`<option value="${esc(n)}">${esc(n.replace(/ Masters$/,""))} · ${SURF_IT[C[n].s]}${C[n].i?" indoor":""}</option>`).join("")+`</optgroup>`:""}).join("");
  $("court-sel").value=st.court&&R.speed[st.court]?st.court:"";st.speed=st.court&&R.speed[st.court]?lastSpeed(R.speed[st.court]):0;
  renderSpeedTable();
  $("names").innerHTML=Object.entries(R.players).filter(([,p])=>p.a).sort((x,y)=>y[1].e-x[1].e).map(([n])=>`<option value="${esc(n)}">`).join("");
  $("la").textContent=w?"Giocatrice 1":"Giocatore 1";$("lb").textContent=w?"Giocatrice 2":"Giocatore 2";
- $("bo").style.display=w?"none":"";
+ $("bo").style.display=w?"none":"";applyCourt();
  $("pa").value=st.a;$("pb").value=st.b;
  const cal=R.calibration,T=R.test,n=cal.reduce((s,c)=>s+c.n,0).toLocaleString("it-IT");
  $("caltxt").innerHTML=`Test su <b>${n}</b> partite ${w?"WTA":"ATP (circuito maggiore, Challenger e qualificazioni)"} dal gennaio 2026, che il modello non aveva visto. Per ogni livello di sicurezza: quante volte ${w?"la favorita":"il favorito"} ha vinto davvero.`;
@@ -396,6 +433,14 @@ function renderCond(){
  }
  if(st.speed){const fast=st.speed>0,big=(A.c||0)>(B.c||0)?st.a:st.b;notes.push(`Campo ${speedWord(st.speed)} (${st.court}): ${fast?"favorisce":"penalizza"} chi fa più ace, cioè ${big}.`)}
  $("condnote").textContent=notes.join(" ");
+ renderPlayerNews();
+}
+function ago(d){const m=Math.round((Date.now()-Date.parse(d.replace(" ","T")+"Z"))/60000);return m<1?"ora":m<60?`${m} min fa`:m<48*60?`${Math.round(m/60)} h fa`:`${Math.round(m/1440)} giorni fa`}
+function renderPlayerNews(){
+ const el=$("pnews");if(!el)return;const N=(LIVE&&LIVE.alerts||[]).filter(a=>a.kind==="news"||a.kind==="tml");
+ const mine=N.filter(a=>a.player===st.a||a.player===st.b);
+ el.innerHTML=`<h3 style="margin:12px 0 4px;font-size:1rem">Notizie fisiche e assenze (ultime 48 ore)</h3>`+(mine.length?mine.slice(0,6).map(a=>`<div class="alert ${a.kind}"><time>${ago(a.date)}</time>${esc(a.text)}${a.url&&/^https?:/.test(a.url)?` <a href="${esc(a.url)}" target="_blank" rel="noopener">leggi</a>`:""}</div>`).join("")
+  :`<p class="small" style="margin:0">Nessuna notizia di infortuni o ritiri su ${esc(st.a)} e ${esc(st.b)}.${LIVE&&LIVE.news_checked?` Ultimo controllo ${ago(LIVE.news_checked)}.`:""}</p>`);
 }
 function renderSlip(){
  const rows=slip.filter(s=>DATA[s.tour]).map((s,i)=>{const p=prob(s.tour,s.a,s.b,s.surface,s.bestOf),f=p>=.5;return{...s,fav:f?s.a:s.b,opp:f?s.b:s.a,p:Math.max(p,1-p),i}});
@@ -482,7 +527,7 @@ function renderLive(){
  const g=new Date(LIVE.generated);
  $("livesub").textContent=`Aggiornato alle ${g.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})} del ${g.toLocaleDateString("it-IT")} · ${LIVE.status}`+(LIVE.credits_remaining!=null?` · crediti quote rimasti: ${Math.round(LIVE.credits_remaining)}`:"");
  const al=(LIVE.alerts||[]).slice(0,10);
- $("alerts").innerHTML=al.map(a=>`<div class="alert ${a.kind}"><time>${esc(a.date)}</time>${esc(a.text)}${a.url&&/^https?:/.test(a.url)?` <a href="${esc(a.url)}" target="_blank" rel="noopener">leggi</a>`:""}${a.player&&!FLAGS[a.player]&&a.kind!=="tml"?`<button type="button" data-apply="${esc(a.player)}">Applica al modello</button>`:a.player&&FLAGS[a.player]?" · <i>applicato</i>":""}</div>`).join("");
+ $("alerts").innerHTML=al.map(a=>`<div class="alert ${a.kind}"><time>${a.kind==="news"?ago(a.date):esc(a.date)}</time>${esc(a.text)}${a.url&&/^https?:/.test(a.url)?` <a href="${esc(a.url)}" target="_blank" rel="noopener">leggi</a>`:""}${a.player&&!FLAGS[a.player]&&a.kind!=="tml"?`<button type="button" data-apply="${esc(a.player)}">Applica al modello</button>`:a.player&&FLAGS[a.player]?" · <i>applicato</i>":""}</div>`).join("");
  const flagged=new Set(al.filter(a=>a.player).map(a=>a.player));
  const rows=(LIVE.matches||[]).filter(m=>DATA[m.tour]).map(m=>{
   const A=findName(m.tour,m.a),B=findName(m.tour,m.b),sp=m.tourney&&DATA[m.tour].speed[m.tourney]?lastSpeed(DATA[m.tour].speed[m.tourney]):0;
@@ -513,9 +558,9 @@ function setPlayer(k,v){st.market=null;const R=DATA[st.tour];v=v.trim();const hi
 $("tour").addEventListener("click",e=>{const v=e.target.closest("button")?.dataset.v;if(v)switchTour(v)});
 $("pa").addEventListener("change",e=>setPlayer("a",e.target.value));
 $("pb").addEventListener("change",e=>setPlayer("b",e.target.value));
-$("surf").addEventListener("click",e=>{if(e.target.dataset.v){st.surface=e.target.dataset.v;render()}});
-$("bo").addEventListener("click",e=>{if(e.target.dataset.v){st.bestOf=+e.target.dataset.v;render()}});
-$("court-sel").addEventListener("change",e=>{const R=DATA[st.tour];st.court=e.target.value;st.speed=st.court?lastSpeed(R.speed[st.court]):0;render()});
+$("surf").addEventListener("click",e=>{if(e.target.dataset.v&&!e.target.disabled){st.surface=e.target.dataset.v;applyCourt();render()}});
+$("bo").addEventListener("click",e=>{if(e.target.dataset.v&&!e.target.disabled){st.bestOf=+e.target.dataset.v;applyCourt();render()}});
+$("court-sel").addEventListener("change",e=>{const R=DATA[st.tour];st.court=e.target.value;st.speed=st.court?lastSpeed(R.speed[st.court]):0;applyCourt();render()});
 $("cond").addEventListener("change",e=>{const n=e.target.dataset.flag;if(n===undefined)return;if(e.target.checked)FLAGS[n]=Date.now();else delete FLAGS[n];try{localStorage.setItem("flags",JSON.stringify(FLAGS))}catch(x){}render();renderLive()});
 $("swap").addEventListener("click",()=>{[st.a,st.b]=[st.b,st.a];$("pa").value=st.a;$("pb").value=st.b;render()});
 $("add").addEventListener("click",()=>{if(st.a!==st.b){slip.push({tour:st.tour,a:st.a,b:st.b,surface:st.surface,bestOf:st.tour==="wta"?3:st.bestOf});renderSlip()}});
@@ -523,10 +568,10 @@ $("slip").addEventListener("click",e=>{const b=e.target.closest(".x");if(b){slip
 const ro=new ResizeObserver(draw);ro.observe($("court"));
 window.TP={DATA,prob,lastSpeed};
 (async()=>{await Promise.all([loadTour("atp"),loadTour("wta")]);
- try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json()}catch(e){LIVE=null}
+ try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json()}catch(e){LIVE=null}renderPlayerNews();
  setTourUI();render();renderDavis();renderLive();renderClv();renderStudio();
  if(Date.now()>Date.parse("2026-11-30"))$("davis").style.display="none";
- setInterval(async()=>{try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json();renderLive()}catch(e){}},5*60*1000)})();
+ setInterval(async()=>{try{LIVE=await (await fetch("data/live.json",{cache:"no-store"})).json();renderLive();renderPlayerNews()}catch(e){}},2*60*1000)})();
 }
 </script>
 <p class="small" style="text-align:center;padding:16px">Dati: TennisMyLife (uso personale) · archivio Jeff Sackmann e Match Charting Project, CC BY-NC-SA 4.0 · quote: The Odds API</p></body></html>

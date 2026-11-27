@@ -48,6 +48,7 @@ def compact(R):
     out["home"] = R["home"]; out["mu"] = R["mu"]
     out["h2h"] = {k: v for k, v in R["h2h"].items() if sum(v) >= 2}; out["sec_per_point"] = R["sec_per_point"]
     out["speed"] = {k: v for k, v in R["court_speed"].items() if int(max(v)) >= dt.date.today().year - 2}
+    out["court"] = {k: v for k, v in R.get("court_info", {}).items() if k in out["speed"]}
     return out
 
 

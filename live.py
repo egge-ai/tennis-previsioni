@@ -134,7 +134,7 @@ def fetch_news(names, state, every_min=30):
         for i in range(0, len(names), 6):
             batch = names[i:i + 6]
             q = "(" + " OR ".join(f'"{n}"' for n in batch) + ") (" + NEWS_WORDS + ") when:2d"
-            for hl, gl, ceid in (("en-US", "US", "US:en"), ("it", "IT", "IT:it")):
+            for hl, gl, ceid in (("en-US", "US", "US:en"), ("it", "IT", "IT:it"), ("es", "ES", "ES:es"), ("fr", "FR", "FR:fr")):
                 url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": q, "hl": hl, "gl": gl, "ceid": ceid})
                 try:
                     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (tennis-previsioni)"})
@@ -290,7 +290,7 @@ def main():
     except Exception as e:
         print("  notizie: errore", e, file=sys.stderr); news = state.get("news", [])
     alerts = [x for x in alerts if x["kind"] == "odds"] + news + [x for x in alerts if x["kind"] == "tml"]
-    out = {"generated": iso(NOW), "status": status, "credits_remaining": state.get("remaining"), "matches": matches, "alerts": alerts[:40]}
+    out = {"generated": iso(NOW), "status": status, "credits_remaining": state.get("remaining"), "matches": matches, "alerts": alerts[:40], "news_checked": (state.get("news_poll") or "").replace("T", " ")[:16] or None}
     json.dump(out, open(os.path.join(a.out, "live.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     json.dump(state, open(sp, "w"), separators=(",", ":"))
     try:

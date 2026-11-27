@@ -739,6 +739,15 @@ def main():
     out["mu"] = {k: round(v, 4) for k, v in st.mu.items()}
     out["court_speed"] = {t: {str(y): round(v * 100, 2) for y, v in sorted(h.items())} for t, h in st.sp_hist.items()
                           if len(h) >= 3 and st.sp_n[(t, max(h))] >= 15}
+    # scheda di ogni torneo (ultima edizione): superficie, formato, coperto, categoria
+    info = {}
+    md = df[~df["tourney_level"].isin(["Q", "S"])]
+    for t, g in md.groupby("tourney_name"):
+        if t not in out["court_speed"]: continue
+        g = g[g["start"].dt.year == g["start"].dt.year.max()]
+        info[t] = {"s": g["surface"].mode().iloc[0], "bo": int(g["best_of"].max()), "i": int(round(float(g["indoor_f"].mean()))),
+                   "lv": str(g["tourney_level"].mode().iloc[0]), "y": int(g["start"].dt.year.max())}
+    out["court_info"] = info
     path = os.path.join(args.out, f"ratings_{args.tour}.json")
     json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False)
     print(f"\nFeature finali: {chosen}\nPesi: {np.round(w_fin, 4).tolist()}\nSalvato {path}: {len(players)} giocatori, dati fino al {out['updated']}")
